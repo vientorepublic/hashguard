@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class CreateChallengeDto {
   @ApiPropertyOptional({
@@ -10,5 +10,8 @@ export class CreateChallengeDto {
   @IsOptional()
   @IsString()
   @MaxLength(128)
+  @Matches(/\S/, {
+    message: 'context must contain at least one non-whitespace character',
+  })
   context?: string;
 }

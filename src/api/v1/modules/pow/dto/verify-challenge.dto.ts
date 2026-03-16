@@ -1,12 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsInt,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Matches,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -17,6 +20,9 @@ export class ClientMetricsDto {
     example: 850,
   })
   @IsOptional()
+  @IsInt({ message: 'solveTimeMs must be an integer' })
+  @Min(0, { message: 'solveTimeMs must be >= 0' })
+  @Max(3_600_000, { message: 'solveTimeMs must be <= 3600000 (1 hour)' })
   solveTimeMs?: number;
 }
 

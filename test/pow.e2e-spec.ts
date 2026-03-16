@@ -117,6 +117,13 @@ describe('PoW E2E', () => {
         .send({ unknown: 'field' })
         .expect(400);
     });
+
+    it('should reject whitespace-only context', async () => {
+      await request(httpServer)
+        .post('/v1/pow/challenges')
+        .send({ context: '   ' })
+        .expect(400);
+    });
   });
 
   // ── Full solve + verify + consume flow ────────────────────────────────
@@ -213,6 +220,26 @@ describe('PoW E2E', () => {
         .send({ challengeId, nonce: 'bad nonce!' })
         .expect(400);
     });
+
+    it('should reject non-integer solveTimeMs', async () => {
+      const challengeRes = await request(httpServer)
+        .post('/v1/pow/challenges')
+        .send({})
+        .expect(201);
+
+      const { challengeId, seed, target } =
+        bodyOf<ChallengeApiResponse>(challengeRes);
+      const nonce = solveChallenge(challengeId, seed, target);
+
+      await request(httpServer)
+        .post('/v1/pow/verifications')
+        .send({
+          challengeId,
+          nonce,
+          clientMetrics: { solveTimeMs: 12.5 },
+        })
+        .expect(400);
+    });
   });
 
   // ── Proof token introspection ─────────────────────────────────────────
@@ -296,6 +323,15 @@ describe('PoW E2E', () => {
         .post('/v1/pow/assertions/introspect')
         .send({ proofToken: tampered })
         .expect(401);
+    });
+
+    it('should reject non-boolean consume value', async () => {
+      const token = await obtainToken();
+
+      await request(httpServer)
+        .post('/v1/pow/assertions/introspect')
+        .send({ proofToken: token, consume: 'true' })
+        .expect(400);
     });
   });
 
