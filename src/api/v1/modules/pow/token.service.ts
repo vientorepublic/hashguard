@@ -2,8 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import Redis from 'ioredis';
-import { PowErrors } from '../../common/exceptions/pow.exceptions';
-import { REDIS_CLIENT } from '../redis/redis.module';
+import { PowErrors } from '../../../../common/exceptions/pow.exceptions';
+import { REDIS_CLIENT } from '../../../../modules/redis/redis.module';
 import { ProofTokenPayload } from './pow.types';
 
 @Injectable()

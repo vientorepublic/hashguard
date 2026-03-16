@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { extractClientIp } from '../../common/utils/proxy-ip.util';
+import { extractClientIp } from '../../../../common/utils/proxy-ip.util';
 import { CreateChallengeDto } from './dto/create-challenge.dto';
 import { IntrospectTokenDto } from './dto/introspect-token.dto';
 import { VerifyChallengeDto } from './dto/verify-challenge.dto';

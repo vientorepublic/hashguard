@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import configuration from './config/configuration';
-import { HealthModule } from './modules/health/health.module';
-import { MetricsModule } from './modules/metrics/metrics.module';
-import { PowModule } from './modules/pow/pow.module';
+import { HealthModule } from './api/v1/modules/health/health.module';
+import { MetricsModule } from './api/v1/modules/metrics/metrics.module';
+import { PowModule } from './api/v1/modules/pow/pow.module';
 import { RedisModule } from './modules/redis/redis.module';
 
 @Module({

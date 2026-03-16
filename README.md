@@ -1,6 +1,6 @@
 # Hashguard
 
-Hashguard는 Bitcoin 채굴 아이디어(해시 기반 작업증명)를 응용해 자동화된 봇 요청을 완화하는 범용 PoW CAPTCHA REST API입니다.
+Hashguard는 [Bitcoin](https://bitcoin.org/) [채굴 아이디어](https://bitcoin.org/bitcoin.pdf)(해시 기반 작업증명)를 응용해 자동화된 봇 요청을 완화하는 범용 PoW CAPTCHA REST API입니다.
 
 - 서버: NestJS (TypeScript)
 - 저장소: Redis (challenge TTL, replay 방지, rate window)

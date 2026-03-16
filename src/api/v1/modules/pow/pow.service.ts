@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
-import { PowErrors } from '../../common/exceptions/pow.exceptions';
+import { PowErrors } from '../../../../common/exceptions/pow.exceptions';
 import { MetricsService } from '../metrics/metrics.service';
 import { CreateChallengeDto } from './dto/create-challenge.dto';
 import { IntrospectTokenDto } from './dto/introspect-token.dto';

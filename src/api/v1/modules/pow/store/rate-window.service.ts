@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import Redis from 'ioredis';
-import { REDIS_CLIENT } from '../../redis/redis.module';
+import { REDIS_CLIENT } from '../../../../../modules/redis/redis.module';
 
 /**
  * Tracks per-IP challenge-request rate using Redis sliding windows.
