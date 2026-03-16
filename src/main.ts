@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -7,7 +7,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
+  const logger = new Logger('Bootstrap');
   const config = app.get(ConfigService);
   const corsOrigins = config.get<string>('app.corsOrigins', '*');
 
@@ -57,8 +57,7 @@ async function bootstrap() {
 
   const port = config.get<number>('app.port', 3000);
   await app.listen(port);
-  console.log(`HashGuard listening on http://localhost:${port}`);
-  console.log(`Swagger docs: http://localhost:${port}/docs`);
+  logger.log(`HashGuard listening on http://localhost:${port}`);
 }
 
-bootstrap();
+void bootstrap();
