@@ -6,7 +6,7 @@ services:
     container_name: hashguard-api
     restart: unless-stopped
     ports:
-      - '${PORT:-3000}:3000'
+      - '127.0.0.1:8000:3000'
     env_file:
       - .env
     environment:
@@ -32,7 +32,7 @@ services:
     image: redis:8.4.0
     restart: unless-stopped
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6399:6379'
     command: redis-server --save 60 1 --loglevel warning
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
