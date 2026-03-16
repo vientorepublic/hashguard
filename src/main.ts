@@ -7,7 +7,13 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const isDevelopment =
+    (process.env.NODE_ENV ?? 'development') === 'development';
+  const app = await NestFactory.create(AppModule, {
+    logger: isDevelopment
+      ? ['log', 'error', 'warn', 'debug', 'verbose']
+      : ['log', 'error', 'warn'],
+  });
   const logger = new Logger('Bootstrap');
   const config = app.get(ConfigService);
   const corsOrigins = config.get<string>('app.corsOrigins', '*');
