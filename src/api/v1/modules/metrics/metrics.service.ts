@@ -1,6 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from '../../../../modules/redis/redis.module';
+
+const DIFFICULTY_DISTRIBUTION_KEY = 'metrics:difficulty:distribution';
 
 export interface PowMetricsSnapshot {
   challengesIssued: number;
@@ -12,14 +14,12 @@ export interface PowMetricsSnapshot {
 
 @Injectable()
 export class MetricsService {
-  private readonly logger = new Logger(MetricsService.name);
-
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
   async recordChallengeIssued(difficultyBits: number): Promise<void> {
     const pipeline = this.redis.pipeline();
     pipeline.incr('metrics:challenges:issued');
-    pipeline.incr(`metrics:difficulty:${difficultyBits}`);
+    pipeline.hincrby(DIFFICULTY_DISTRIBUTION_KEY, difficultyBits.toString(), 1);
     await pipeline.exec();
   }
 
@@ -49,23 +49,15 @@ export class MetricsService {
         'metrics:solvetime:count',
       );
 
-    // Collect difficulty distribution keys
-    const diffKeys = await this.redis.keys('*metrics:difficulty:*');
-
-    const diffDist: Record<string, number> = {};
-    if (diffKeys.length > 0) {
-      // Strip the keyPrefix (ioredis adds prefix to keys returned by KEYS command too? No — KEYS returns raw keys including prefix)
-      // We need to strip prefix from keys before calling mget, because mget will add the prefix again.
-      // Actually ioredis does NOT strip the prefix from KEYS results, but DOES add it on GET.
-      // So we need to strip the prefix when calling other commands.
-      const prefix = (this.redis.options.keyPrefix as string) ?? '';
-      const strippedKeys = diffKeys.map((k) => k.slice(prefix.length));
-      const vals = await this.redis.mget(...strippedKeys);
-      strippedKeys.forEach((k, i) => {
-        const bits = k.replace('metrics:difficulty:', '');
-        diffDist[bits] = vals[i] ? parseInt(vals[i], 10) : 0;
-      });
-    }
+    const difficultyDistributionRaw = await this.redis.hgetall(
+      DIFFICULTY_DISTRIBUTION_KEY,
+    );
+    const diffDist = Object.fromEntries(
+      Object.entries(difficultyDistributionRaw).map(([bits, count]) => [
+        bits,
+        parseInt(count, 10),
+      ]),
+    );
 
     const sumVal = solveSum ? parseInt(solveSum, 10) : 0;
     const countVal = solveCount ? parseInt(solveCount, 10) : 0;
