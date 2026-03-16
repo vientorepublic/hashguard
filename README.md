@@ -135,6 +135,36 @@ curl -s -X POST http://localhost:3000/v1/pow/assertions/introspect \
 - `POW_MIN_SOLVE_TIME_MS`: 비정상적으로 빠른 solve 차단 기준
 - `POW_MAX_FAILURES_PER_CHALLENGE`: 챌린지별 실패 허용 횟수
 
+### 안전한 HMAC 서명키 생성
+
+운영 환경에서는 `POW_TOKEN_SECRET`에 사람이 읽기 쉬운 문자열 대신 충분히 긴 랜덤 바이트 기반 키를 사용하는 것이 좋습니다.
+
+OpenSSL 기준 예시:
+
+```bash
+openssl rand -base64 32
+```
+
+더 긴 키가 필요하면 48바이트 또는 64바이트로 생성할 수 있습니다.
+
+```bash
+openssl rand -base64 48
+openssl rand -base64 64
+```
+
+생성한 값을 `.env`에 그대로 넣으면 됩니다.
+
+```env
+POW_TOKEN_SECRET=GENERATED_RANDOM_STRING
+```
+
+권장 사항:
+
+- 최소 32바이트 이상의 랜덤 값을 사용하세요.
+- 개발/스테이징/운영 환경에서 서로 다른 키를 사용하세요.
+- 키를 Git에 커밋하지 마세요.
+- 키를 교체하면 기존 proof token은 더 이상 유효하지 않으므로 배포 시점을 고려하세요.
+
 ## 테스트
 
 ### 단위 테스트
