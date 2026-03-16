@@ -53,6 +53,21 @@ docker compose up -d redis
 
 로컬 Redis가 이미 있다면 해당 정보를 `.env`에 맞춰주세요.
 
+### 앱 + Redis를 도커로 함께 실행
+
+```bash
+docker compose up --build -d
+```
+
+- API Base URL: `http://localhost:3000/v1`
+- Swagger: `http://localhost:3000/docs`
+
+중지:
+
+```bash
+docker compose down
+```
+
 ### 4) 개발 서버 실행
 
 ```bash

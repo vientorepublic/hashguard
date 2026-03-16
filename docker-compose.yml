@@ -1,11 +1,45 @@
 version: '3.9'
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hashguard-api
+    restart: unless-stopped
+    ports:
+      - '${PORT:-3000}:3000'
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://127.0.0.1:3000/v1/health/liveness',(res)=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
       - '6379:6379'
     command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
     volumes:
       - redis_data:/data
 
