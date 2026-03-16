@@ -1,67 +1,67 @@
 # Hashguard
 
-Hashguard는 [Bitcoin](https://bitcoin.org/) [채굴 아이디어](https://bitcoin.org/bitcoin.pdf)(해시 기반 작업증명)를 응용해 자동화된 봇 요청을 완화하는 범용 PoW CAPTCHA REST API입니다.
+Hashguard is a general-purpose Proof-of-Work (PoW) CAPTCHA REST API that mitigates automated bot requests by applying [Bitcoin mining concepts](https://bitcoin.org/bitcoin.pdf) (hash-based proof-of-work).
 
-- 서버: NestJS (TypeScript)
-- 저장소: Redis (challenge TTL, replay 방지, rate window)
-- 해시 알고리즘: SHA-256
-- 정책: 요청 빈도/실패율 기반 난이도 동적 조정
+- Server: NestJS (TypeScript)
+- Storage: Redis (challenge TTL, replay prevention, rate window)
+- Hash Algorithm: SHA-256
+- Policy: Dynamic difficulty adjustment based on request frequency and failure rate
 
-## 작동 원리
+## How It Works
 
-Hashguard는 요청마다 계산 비용(해시 연산)을 클라이언트에 부과해 공격자의 단위 시간당 처리량을 낮춥니다.
+Hashguard imposes a computational cost (hash computation) on clients for each request, reducing the throughput of attackers per unit time.
 
-트래픽이 급증하거나 실패율이 높아질수록 난이도가 올라가므로, 봇은 더 많은 CPU/GPU 자원을 써야 같은 요청량을 유지할 수 있습니다.
+As traffic spikes or failure rates increase, difficulty ramps up, forcing bots to consume more CPU/GPU resources to maintain the same request volume.
 
-또한 짧은 TTL의 single-use proof token을 사용해 재사용 공격을 줄여, 대량 자동화 요청의 비용 대비 효과를 지속적으로 악화시킵니다.
+By using short-TTL, single-use proof tokens, we also reduce replay attacks, continuously worsening the cost-effectiveness of large-scale automated requests.
 
-## 핵심 개념
+## Core Concepts
 
-1. 클라이언트가 챌린지를 발급받습니다.
-2. `SHA-256(challengeId:seed:nonce) <= target`을 만족하는 nonce를 찾습니다.
-3. 서버에 nonce를 제출해 검증을 통과하면 짧은 TTL의 `proofToken`을 받습니다.
-4. 보호 리소스 서버는 `proofToken`을 introspect(검증/소모)해 요청을 허용합니다.
+1. The client requests and receives a challenge.
+2. It searches for a nonce that satisfies `SHA-256(challengeId:seed:nonce) <= target`.
+3. The client submits the nonce to the server. Upon successful verification, it receives a short-lived `proofToken`.
+4. The resource server validates/consumes the `proofToken` via introspection to authorize the request.
 
-기본 정책은 `1회 solve = 1회 보호 요청`(single-use)입니다.
+The default policy is `1 solve = 1 protected request` (single-use).
 
-## 아키텍처 요약
+## Architecture Overview
 
-- `POST /v1/pow/challenges`: 챌린지 발급
-- `POST /v1/pow/verifications`: nonce 검증 + proof token 발급
-- `POST /v1/pow/assertions/introspect`: proof token 검증(기본 consume=true)
-- `GET /v1/metrics/pow`: 운영 메트릭 스냅샷
-- `GET /v1/health`, `GET /v1/health/liveness`: 헬스체크
+- `POST /v1/pow/challenges`: Issue a challenge
+- `POST /v1/pow/verifications`: Verify nonce and issue proof token
+- `POST /v1/pow/assertions/introspect`: Verify/consume proof token
+- `GET /v1/metrics/pow`: Operational metrics snapshot
+- `GET /v1/health`, `GET /v1/health/liveness`: Health checks
 
-### 난이도 계산
+### Difficulty Calculation
 
-- 입력 신호: IP별 분당 챌린지 요청량(RPM), 분당 실패량
-- 기본 난이도: `POW_BASE_DIFFICULTY_BITS`
-- 상한 난이도: `POW_MAX_DIFFICULTY_BITS`
-- 요청량/실패량이 높을수록 추가 비트를 부여해 난이도를 높입니다.
+- Input signals: Requests per minute (RPM) by IP, failures per minute
+- Base difficulty: `POW_BASE_DIFFICULTY_BITS`
+- Max difficulty: `POW_MAX_DIFFICULTY_BITS`
+- As RPM and failure rates increase, additional bits are added to raise the difficulty.
 
-## 빠른 시작
+## Quick Start
 
-### 1) 의존성 설치
+### 1) Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 2) 환경 변수 준비
+### 2) Prepare Environment Variables
 
 ```bash
 cp .env.example .env
 ```
 
-### 3) Redis 실행
+### 3) Run Redis
 
 ```bash
 docker compose up -d redis
 ```
 
-로컬 Redis가 이미 있다면 해당 정보를 `.env`에 맞춰주세요.
+If you already have a local Redis instance, update `.env` with the connection details.
 
-### 앱 + Redis를 도커로 함께 실행
+### Run App + Redis Together with Docker
 
 ```bash
 docker compose up --build -d
@@ -70,13 +70,13 @@ docker compose up --build -d
 - API Base URL: `http://localhost:3000/v1`
 - Swagger: `http://localhost:3000/docs`
 
-중지:
+To stop:
 
 ```bash
 docker compose down
 ```
 
-### 4) 개발 서버 실행
+### 4) Start Development Server
 
 ```bash
 npm run start:dev
@@ -85,9 +85,9 @@ npm run start:dev
 - API Base URL: `http://localhost:3000/v1`
 - Swagger: `http://localhost:3000/docs`
 
-## API 사용 예시
+## API Usage Examples
 
-### 1) 챌린지 발급
+### 1) Issue a Challenge
 
 ```bash
 curl -s -X POST http://localhost:3000/v1/pow/challenges \
@@ -95,7 +95,7 @@ curl -s -X POST http://localhost:3000/v1/pow/challenges \
 	-d '{"context":"login"}'
 ```
 
-응답 예시:
+Example response:
 
 ```json
 {
@@ -109,15 +109,15 @@ curl -s -X POST http://localhost:3000/v1/pow/challenges \
 }
 ```
 
-### 2) nonce 계산
+### 2) Calculate Nonce
 
-클라이언트는 아래 조건을 만족하는 nonce를 brute-force로 찾습니다.
+The client brute-forces to find a nonce satisfying:
 
 ```text
 sha256(challengeId:seed:nonce) <= target
 ```
 
-### 3) 검증 요청
+### 3) Submit Verification
 
 ```bash
 curl -s -X POST http://localhost:3000/v1/pow/verifications \
@@ -129,9 +129,9 @@ curl -s -X POST http://localhost:3000/v1/pow/verifications \
 	}'
 ```
 
-성공 시 `proofToken`이 반환됩니다.
+On success, a `proofToken` is returned.
 
-### 4) proof token introspection
+### 4) Introspect Proof Token
 
 ```bash
 curl -s -X POST http://localhost:3000/v1/pow/assertions/introspect \
@@ -139,88 +139,92 @@ curl -s -X POST http://localhost:3000/v1/pow/assertions/introspect \
 	-d '{"proofToken":"<TOKEN>","consume":true}'
 ```
 
-- `consume=true`(기본): 검증 성공 시 토큰 소모
-- `consume=false`: 읽기 전용 검증
+- `consume=true` (default): Token is consumed on successful verification
+- `consume=false`: Read-only verification
 
-## 환경 변수
+## Environment Variables
 
-주요 설정은 `.env.example`에 정리되어 있습니다.
+Key configuration is documented in `.env.example`.
 
-- `PORT`: 서버 포트
+- `PORT`: Server port
 - `TRUSTED_PROXY`: `cloudflare | x-forwarded-for | none`
-- `CORS_ORIGINS`: 허용 Origin (`*` 또는 comma-separated)
-- `REDIS_*`: Redis 연결 정보
-- `POW_CHALLENGE_TTL_SECONDS`: 챌린지 유효시간
-- `POW_PROOF_TOKEN_TTL_SECONDS`: proof token 유효시간
-- `POW_TOKEN_SECRET`: proof token 서명 키
-- `POW_BASE_DIFFICULTY_BITS`: 기본 난이도
-- `POW_MAX_DIFFICULTY_BITS`: 최대 난이도
-- `POW_MIN_SOLVE_TIME_MS`: 비정상적으로 빠른 solve 차단 기준
-- `POW_MAX_FAILURES_PER_CHALLENGE`: 챌린지별 실패 허용 횟수
+- `CORS_ORIGINS`: Allowed origins (`*` or comma-separated)
+- `REDIS_*`: Redis connection details
+- `POW_CHALLENGE_TTL_SECONDS`: Challenge validity period
+- `POW_PROOF_TOKEN_TTL_SECONDS`: Proof token validity period
+- `POW_TOKEN_SECRET`: Proof token signing key
+- `POW_BASE_DIFFICULTY_BITS`: Base difficulty
+- `POW_MAX_DIFFICULTY_BITS`: Maximum difficulty
+- `POW_MIN_SOLVE_TIME_MS`: Threshold for flagging abnormally fast solves
+- `POW_MAX_FAILURES_PER_CHALLENGE`: Allowed failures per challenge
 
-### 안전한 HMAC 서명키 생성
+### Generating a Secure HMAC Signing Key
 
-운영 환경에서는 `POW_TOKEN_SECRET`에 사람이 읽기 쉬운 문자열 대신 충분히 긴 랜덤 바이트 기반 키를 사용하는 것이 좋습니다.
+In production, replace the human-readable string in `POW_TOKEN_SECRET` with a sufficiently long random byte-based key.
 
-OpenSSL 기준 예시:
+Example using OpenSSL:
 
 ```bash
 openssl rand -base64 32
 ```
 
-더 긴 키가 필요하면 48바이트 또는 64바이트로 생성할 수 있습니다.
+For longer keys, use 48 or 64 bytes:
 
 ```bash
 openssl rand -base64 48
 openssl rand -base64 64
 ```
 
-생성한 값을 `.env`에 그대로 넣으면 됩니다.
+Place the generated value directly in `.env`:
 
 ```env
 POW_TOKEN_SECRET=GENERATED_RANDOM_STRING
 ```
 
-권장 사항:
+Recommendations:
 
-- 최소 32바이트 이상의 랜덤 값을 사용하세요.
-- 개발/스테이징/운영 환경에서 서로 다른 키를 사용하세요.
-- 키를 Git에 커밋하지 마세요.
-- 키를 교체하면 기존 proof token은 더 이상 유효하지 않으므로 배포 시점을 고려하세요.
+- Use at least 32 bytes of random data.
+- Use different keys for development, staging, and production environments.
+- Do not commit keys to Git.
+- When rotating keys, note that existing proof tokens will become invalid, so plan accordingly.
 
-## 테스트
+## Testing
 
-### 단위 테스트
+### Unit Tests
 
 ```bash
 npm test
 ```
 
-### E2E 테스트
+### E2E Tests
 
-Redis가 실행 중이어야 합니다.
+Redis must be running:
 
 ```bash
 npm run test:e2e -- --runInBand
 ```
 
-## 보안/운영 주의사항
+## Security & Operations
 
-- 운영 환경에서는 반드시 `POW_TOKEN_SECRET`를 강한 랜덤 값으로 교체하세요.
-- 기본 정책은 single-use 토큰이므로 보호 서버에서 재사용을 허용하지 않도록 유지하세요.
-- Cloudflare 환경이라면 `CF-Connecting-IP` 헤더 신뢰 체인을 정확히 구성하세요.
-- 난이도 값(`BASE/MAX`)은 사용자 기기 성능을 고려해 트래픽 패턴에 맞게 튜닝하세요.
+- In production, always replace `POW_TOKEN_SECRET` with a strong random value.
+- The default policy uses single-use tokens; ensure your resource servers don't allow reuse.
+- If behind Cloudflare, configure the `CF-Connecting-IP` header trust chain correctly.
+- Tune difficulty values (`BASE/MAX`) based on client device performance and traffic patterns.
 
-## 현재 범위와 향후 확장
+## Current Scope & Future Extensions
 
-현재 범위:
+Current scope:
 
-- 독립형 NestJS PoW API 서버
-- Redis 기반 challenge/replay/rate 관리
-- OpenAPI(Swagger), health, metrics
+- Standalone NestJS PoW API server
+- Redis-based challenge/replay/rate management
+- OpenAPI (Swagger), health checks, metrics
 
-향후 확장 아이디어:
+Future extension ideas:
 
-- 브라우저/모바일 SDK
-- 보호 서비스용 공식 middleware/guard 패키지
-- 서명 공개키 기반 offline token verification
+- Browser/mobile SDKs
+- Official middleware/guard packages for resource protection services
+- Offline token verification using public key signatures
+
+## License
+
+MIT
