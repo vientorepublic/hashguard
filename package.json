@@ -1,10 +1,10 @@
 {
   "name": "hashguard",
   "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "description": "Defending against large scale bot attacks with Proof-of-Work",
+  "author": "vientorepublic",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
