@@ -1,10 +1,50 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import type { Express } from 'express';
+import type { Server } from 'http';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as crypto from 'crypto';
-import request from 'supertest';
+import request, { Response } from 'supertest';
 import { AppModule } from './../src/app.module';
 import { AllExceptionsFilter } from './../src/common/filters/all-exceptions.filter';
+
+interface ChallengeApiResponse {
+  challengeId: string;
+  algorithm: 'sha256';
+  seed: string;
+  difficultyBits: number;
+  target: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+interface VerificationApiResponse {
+  proofToken: string;
+  expiresAt: string;
+}
+
+interface ErrorApiResponse {
+  code: string;
+  message: string | string[];
+  statusCode: number;
+  timestamp: string;
+  path: string;
+}
+
+interface IntrospectionApiResponse {
+  valid: boolean;
+  subject?: string;
+  context?: string;
+  issuedAt?: string;
+  expiresAt?: string;
+}
+
+interface HealthApiResponse {
+  status: string;
+}
+
+function bodyOf<T>(response: Response): T {
+  return response.body as unknown as T;
+}
 
 /**
  * Brute-forces a nonce that satisfies SHA-256(id:seed:nonce) ≤ target.
@@ -24,6 +64,7 @@ function solveChallenge(id: string, seed: string, target: string): string {
 
 describe('PoW E2E', () => {
   let app: INestApplication;
+  let httpServer: Server;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -31,7 +72,8 @@ describe('PoW E2E', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.set('trust proxy', 1);
+    const expressApp = app.getHttpAdapter().getInstance() as Express;
+    expressApp.set('trust proxy', 1);
     app.setGlobalPrefix('v1');
     app.useGlobalPipes(
       new ValidationPipe({
@@ -42,6 +84,7 @@ describe('PoW E2E', () => {
     );
     app.useGlobalFilters(new AllExceptionsFilter());
     await app.init();
+    httpServer = app.getHttpServer() as Server;
   });
 
   afterAll(async () => {
@@ -52,24 +95,24 @@ describe('PoW E2E', () => {
 
   describe('POST /v1/pow/challenges', () => {
     it('should issue a challenge with correct shape', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await request(httpServer)
         .post('/v1/pow/challenges')
         .send({ context: 'test' })
         .expect(201);
 
-      expect(res.body).toMatchObject({
-        algorithm: 'sha256',
-        difficultyBits: expect.any(Number),
-        target: expect.stringMatching(/^[0-9a-f]{64}$/),
-        seed: expect.stringMatching(/^[0-9a-f]{64}$/),
-        challengeId: expect.stringMatching(
-          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-        ),
-      });
+      const body = bodyOf<ChallengeApiResponse>(res);
+
+      expect(body.algorithm).toBe('sha256');
+      expect(typeof body.difficultyBits).toBe('number');
+      expect(body.target).toMatch(/^[0-9a-f]{64}$/);
+      expect(body.seed).toMatch(/^[0-9a-f]{64}$/);
+      expect(body.challengeId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
     });
 
     it('should reject unknown body fields', async () => {
-      await request(app.getHttpServer())
+      await request(httpServer)
         .post('/v1/pow/challenges')
         .send({ unknown: 'field' })
         .expect(400);
@@ -81,88 +124,93 @@ describe('PoW E2E', () => {
   describe('POST /v1/pow/verifications', () => {
     it('should accept a valid proof and return a proof token', async () => {
       // 1. Issue challenge
-      const challengeRes = await request(app.getHttpServer())
+      const challengeRes = await request(httpServer)
         .post('/v1/pow/challenges')
         .send({ context: 'e2e-test' })
         .expect(201);
 
-      const { challengeId, seed, target } = challengeRes.body as {
-        challengeId: string;
-        seed: string;
-        target: string;
-      };
+      const challenge = bodyOf<ChallengeApiResponse>(challengeRes);
 
       // 2. Solve
-      const nonce = solveChallenge(challengeId, seed, target);
+      const nonce = solveChallenge(
+        challenge.challengeId,
+        challenge.seed,
+        challenge.target,
+      );
 
       // 3. Verify
-      const verifyRes = await request(app.getHttpServer())
+      const verifyRes = await request(httpServer)
         .post('/v1/pow/verifications')
-        .send({ challengeId, nonce, clientMetrics: { solveTimeMs: 500 } })
+        .send({
+          challengeId: challenge.challengeId,
+          nonce,
+          clientMetrics: { solveTimeMs: 500 },
+        })
         .expect(200);
 
-      expect(verifyRes.body).toMatchObject({
-        proofToken: expect.any(String),
-        expiresAt: expect.any(String),
-      });
+      const body = bodyOf<VerificationApiResponse>(verifyRes);
+
+      expect(typeof body.proofToken).toBe('string');
+      expect(typeof body.expiresAt).toBe('string');
     });
 
     it('should reject an invalid nonce with 400 POW_INVALID_PROOF', async () => {
-      const challengeRes = await request(app.getHttpServer())
+      const challengeRes = await request(httpServer)
         .post('/v1/pow/challenges')
         .send({})
         .expect(201);
 
-      const { challengeId } = challengeRes.body as { challengeId: string };
-      const res = await request(app.getHttpServer())
+      const { challengeId } = bodyOf<ChallengeApiResponse>(challengeRes);
+      const res = await request(httpServer)
         .post('/v1/pow/verifications')
         .send({ challengeId, nonce: 'definitely-wrong-nonce-000' })
         .expect(400);
 
-      expect(res.body.code).toBe('POW_INVALID_PROOF');
+      expect(bodyOf<ErrorApiResponse>(res).code).toBe('POW_INVALID_PROOF');
     });
 
     it('should reject a replay (same challenge used twice)', async () => {
-      const challengeRes = await request(app.getHttpServer())
+      const challengeRes = await request(httpServer)
         .post('/v1/pow/challenges')
         .send({})
         .expect(201);
 
-      const { challengeId, seed, target } = challengeRes.body as {
-        challengeId: string;
-        seed: string;
-        target: string;
-      };
+      const challenge = bodyOf<ChallengeApiResponse>(challengeRes);
 
-      const nonce = solveChallenge(challengeId, seed, target);
+      const nonce = solveChallenge(
+        challenge.challengeId,
+        challenge.seed,
+        challenge.target,
+      );
 
       // First use — should succeed
-      await request(app.getHttpServer())
+      await request(httpServer)
         .post('/v1/pow/verifications')
-        .send({ challengeId, nonce })
+        .send({ challengeId: challenge.challengeId, nonce })
         .expect(200);
 
       // Second use — challenge is consumed
-      const res = await request(app.getHttpServer())
+      const res = await request(httpServer)
         .post('/v1/pow/verifications')
-        .send({ challengeId, nonce })
+        .send({ challengeId: challenge.challengeId, nonce })
         .expect(404);
 
-      expect(res.body.code).toBe('POW_CHALLENGE_NOT_FOUND');
+      expect(bodyOf<ErrorApiResponse>(res).code).toBe(
+        'POW_CHALLENGE_NOT_FOUND',
+      );
     });
 
     it('should reject a nonce with invalid characters', async () => {
-      const challengeRes = await request(app.getHttpServer())
+      const challengeRes = await request(httpServer)
         .post('/v1/pow/challenges')
         .send({})
         .expect(201);
 
-      await request(app.getHttpServer())
+      const { challengeId } = bodyOf<ChallengeApiResponse>(challengeRes);
+
+      await request(httpServer)
         .post('/v1/pow/verifications')
-        .send({
-          challengeId: challengeRes.body.challengeId,
-          nonce: 'bad nonce!',
-        })
+        .send({ challengeId, nonce: 'bad nonce!' })
         .expect(400);
     });
   });
@@ -171,36 +219,36 @@ describe('PoW E2E', () => {
 
   describe('POST /v1/pow/assertions/introspect', () => {
     async function obtainToken(): Promise<string> {
-      const challengeRes = await request(app.getHttpServer())
+      const challengeRes = await request(httpServer)
         .post('/v1/pow/challenges')
         .send({ context: 'introspect-test' })
         .expect(201);
 
-      const { challengeId, seed, target } = challengeRes.body as {
-        challengeId: string;
-        seed: string;
-        target: string;
-      };
+      const challenge = bodyOf<ChallengeApiResponse>(challengeRes);
 
-      const nonce = solveChallenge(challengeId, seed, target);
+      const nonce = solveChallenge(
+        challenge.challengeId,
+        challenge.seed,
+        challenge.target,
+      );
 
-      const verifyRes = await request(app.getHttpServer())
+      const verifyRes = await request(httpServer)
         .post('/v1/pow/verifications')
-        .send({ challengeId, nonce })
+        .send({ challengeId: challenge.challengeId, nonce })
         .expect(200);
 
-      return (verifyRes.body as { proofToken: string }).proofToken;
+      return bodyOf<VerificationApiResponse>(verifyRes).proofToken;
     }
 
     it('should validate and consume a valid proof token', async () => {
       const token = await obtainToken();
 
-      const res = await request(app.getHttpServer())
+      const res = await request(httpServer)
         .post('/v1/pow/assertions/introspect')
         .send({ proofToken: token, consume: true })
         .expect(200);
 
-      expect(res.body).toMatchObject({
+      expect(bodyOf<IntrospectionApiResponse>(res)).toMatchObject({
         valid: true,
         context: 'introspect-test',
       });
@@ -210,31 +258,31 @@ describe('PoW E2E', () => {
       const token = await obtainToken();
 
       // First call — consume
-      await request(app.getHttpServer())
+      await request(httpServer)
         .post('/v1/pow/assertions/introspect')
         .send({ proofToken: token })
         .expect(200);
 
       // Second call — already used
-      const res = await request(app.getHttpServer())
+      const res = await request(httpServer)
         .post('/v1/pow/assertions/introspect')
         .send({ proofToken: token })
         .expect(409);
 
-      expect(res.body.code).toBe('POW_TOKEN_ALREADY_USED');
+      expect(bodyOf<ErrorApiResponse>(res).code).toBe('POW_TOKEN_ALREADY_USED');
     });
 
     it('should inspect without consuming when consume=false', async () => {
       const token = await obtainToken();
 
       // Read-only
-      await request(app.getHttpServer())
+      await request(httpServer)
         .post('/v1/pow/assertions/introspect')
         .send({ proofToken: token, consume: false })
         .expect(200);
 
       // Token should still be valid (not consumed)
-      await request(app.getHttpServer())
+      await request(httpServer)
         .post('/v1/pow/assertions/introspect')
         .send({ proofToken: token, consume: false })
         .expect(200);
@@ -244,7 +292,7 @@ describe('PoW E2E', () => {
       const token = await obtainToken();
       const tampered = token.slice(0, -4) + 'XXXX';
 
-      await request(app.getHttpServer())
+      await request(httpServer)
         .post('/v1/pow/assertions/introspect')
         .send({ proofToken: tampered })
         .expect(401);
@@ -255,14 +303,12 @@ describe('PoW E2E', () => {
 
   describe('GET /v1/health', () => {
     it('should return health status with redis check', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/v1/health')
-        .expect(200);
-      expect(res.body.status).toBe('ok');
+      const res = await request(httpServer).get('/v1/health').expect(200);
+      expect(bodyOf<HealthApiResponse>(res).status).toBe('ok');
     });
 
     it('liveness should always return ok', async () => {
-      await request(app.getHttpServer()).get('/v1/health/liveness').expect(200);
+      await request(httpServer).get('/v1/health/liveness').expect(200);
     });
   });
 });

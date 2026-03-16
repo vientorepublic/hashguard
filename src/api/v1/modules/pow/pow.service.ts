@@ -161,14 +161,10 @@ export class PowService {
 
   async introspectToken(dto: IntrospectTokenDto): Promise<IntrospectResponse> {
     const consume = dto.consume !== false; // default: true
-    let payload: ProofTokenPayload;
-
-    try {
-      payload = await this.token.verify(dto.proofToken, consume);
-    } catch (err) {
-      // Re-throw all PowErrors as-is; wrap unknown errors
-      throw err;
-    }
+    const payload: ProofTokenPayload = await this.token.verify(
+      dto.proofToken,
+      consume,
+    );
 
     return {
       valid: true,

@@ -38,7 +38,7 @@ export class VerifyChallengeDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(128)
-  @Matches(/^[a-zA-Z0-9_\-]+$/, {
+  @Matches(/^[a-zA-Z0-9_-]+$/, {
     message: 'nonce must be alphanumeric (a-z, A-Z, 0-9, _, -)',
   })
   nonce: string;
