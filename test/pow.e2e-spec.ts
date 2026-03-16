@@ -5,7 +5,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import * as crypto from 'crypto';
 import request, { Response } from 'supertest';
 import { AppModule } from './../src/app.module';
-import { AllExceptionsFilter } from './../src/common/filters/all-exceptions.filter';
+import { AllExceptionsFilter } from '../src/common/filters/global-exceptions.filter';
 
 interface ChallengeApiResponse {
   challengeId: string;

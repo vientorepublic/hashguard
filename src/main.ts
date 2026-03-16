@@ -2,14 +2,17 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import type { Express } from 'express';
 import { AppModule } from './app.module';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { GlobalExceptionsFilter } from './common/filters/global-exceptions.filter';
+import { NestExpressApplication } from '@nestjs/platform-express';
+
+// Change this if you want to serve a different API version
+const API_VERSION = 'v1';
 
 async function bootstrap() {
   const isDevelopment =
     (process.env.NODE_ENV ?? 'development') === 'development';
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: isDevelopment
       ? ['log', 'error', 'warn', 'debug', 'verbose']
       : ['log', 'error', 'warn'],
@@ -19,8 +22,11 @@ async function bootstrap() {
   const corsOrigins = config.get<string>('app.corsOrigins', '*');
 
   // Trust Cloudflare / upstream proxy
-  const expressApp = app.getHttpAdapter().getInstance() as Express;
+  const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
+
+  // Disable X-Powered-By header for security best practice
+  app.disable('x-powered-by');
 
   // CORS
   app.enableCors({
@@ -31,9 +37,9 @@ async function bootstrap() {
   });
 
   // Global route prefix
-  app.setGlobalPrefix('v1');
+  app.setGlobalPrefix(API_VERSION);
 
-  // Global validation pipe (strips unknown fields, enables class-validator)
+  // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -43,7 +49,7 @@ async function bootstrap() {
   );
 
   // Global exception filter (uniform JSON error responses)
-  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalFilters(new GlobalExceptionsFilter());
 
   // OpenAPI / Swagger
   const swaggerConfig = new DocumentBuilder()
