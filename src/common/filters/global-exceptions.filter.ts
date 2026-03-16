@@ -9,8 +9,8 @@ import {
 import { Request, Response } from 'express';
 
 @Catch()
-export class AllExceptionsFilter implements ExceptionFilter {
-  private readonly logger = new Logger(AllExceptionsFilter.name);
+export class GlobalExceptionsFilter implements ExceptionFilter {
+  private readonly logger = new Logger(GlobalExceptionsFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
