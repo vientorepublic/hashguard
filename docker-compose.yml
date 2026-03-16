@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   app:
     build:
@@ -30,7 +29,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:8.4.0
     restart: unless-stopped
     ports:
       - '6379:6379'
