@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
-import { HashService } from '../src/modules/pow/hash.service';
-import { DifficultyService } from '../src/modules/pow/difficulty.service';
-import { RateWindowService } from '../src/modules/pow/store/rate-window.service';
+import { HashService } from '../src/api/v1/modules/pow/hash.service';
+import { DifficultyService } from '../src/api/v1/modules/pow/difficulty.service';
+import { RateWindowService } from '../src/api/v1/modules/pow/store/rate-window.service';
 
 function makeConfig(base = 20, max = 26): ConfigService {
   return {

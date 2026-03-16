@@ -1,4 +1,4 @@
-import { HashService } from '../src/modules/pow/hash.service';
+import { HashService } from '../src/api/v1/modules/pow/hash.service';
 
 describe('HashService', () => {
   let svc: HashService;
