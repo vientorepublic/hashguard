@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from '../../../../modules/redis/redis.module';
+import { INCR_DIFFICULTY_DISTRIBUTION_SCRIPT } from './scripts/incr-difficulty-distribution.script';
 
 const METRICS_CONFIG_KEYS = {
   maxDifficultyDistributionKeys: 'metrics.maxDifficultyDistributionKeys',
@@ -21,21 +22,6 @@ const DISTRIBUTION_INCR_SCRIPT_KEY_COUNT = 1;
 
 type MetricCounterValue = string | null;
 type DifficultyDistributionRaw = Record<string, string>;
-
-const INCR_DIFFICULTY_DISTRIBUTION_SCRIPT = `
-local distributionKey = KEYS[1]
-local difficultyBits = ARGV[1]
-local maxKeys = tonumber(ARGV[2])
-
-local exists = redis.call('HEXISTS', distributionKey, difficultyBits) == 1
-local hasCapacity = redis.call('HLEN', distributionKey) < maxKeys
-
-if exists or hasCapacity then
-  return redis.call('HINCRBY', distributionKey, difficultyBits, 1)
-end
-
-return 0
-`;
 
 export interface PowMetricsSnapshot {
   challengesIssued: number;

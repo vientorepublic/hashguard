@@ -13,7 +13,9 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  @ApiOperation({ summary: 'Readiness check (includes Redis connectivity)' })
+  @ApiOperation({
+    summary: 'Returns Hashguard server health status (e.g. Redis connectivity)',
+  })
   check() {
     return this.health.check([() => this.redisIndicator.isHealthy('redis')]);
   }

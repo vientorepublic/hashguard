@@ -41,7 +41,7 @@ export class PowController {
   @ApiResponse({
     status: 201,
     description:
-      'Challenge created. Solve SHA-256(challengeId:seed:nonce) ≤ target, then POST /verifications.',
+      'Challenge created. Solve `SHA-256(challengeId:seed:nonce) ≤ target`, then POST /verifications.',
     schema: {
       example: {
         challengeId: 'a1b2c3d4-…',
