@@ -21,6 +21,15 @@ export class RateWindowService {
 
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
+  private asInt(value: unknown): number {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseInt(value, 10);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  }
+
   private windowKey(ip: string, windowEpoch: number): string {
     return `rate:challenges:${ip}:${windowEpoch}`;
   }
@@ -67,6 +76,47 @@ export class RateWindowService {
     // Weighted average: smoothly transitions from prev to current
     const smoothed = prev * (1 - windowProgress) + current;
     return smoothed;
+  }
+
+  /**
+   * Atomically increments current challenge counter, then returns smoothed
+   * challenge RPM and failure RPM for difficulty decisions.
+   */
+  async incrementChallengeAndGetRates(
+    ip: string,
+  ): Promise<{ rpm: number; failRpm: number }> {
+    const now = Date.now();
+    const epoch = Math.floor(now / (RateWindowService.WINDOW_SECONDS * 1000));
+    const prevEpoch = epoch - 1;
+
+    const challengeCurrentKey = this.windowKey(ip, epoch);
+    const challengePrevKey = this.windowKey(ip, prevEpoch);
+    const failCurrentKey = `rate:failures:${ip}:${epoch}`;
+    const failPrevKey = `rate:failures:${ip}:${prevEpoch}`;
+
+    const tx = this.redis.multi();
+    tx.incr(challengeCurrentKey);
+    tx.expire(challengeCurrentKey, RateWindowService.KEY_TTL_SECONDS);
+    tx.get(challengeCurrentKey);
+    tx.get(challengePrevKey);
+    tx.get(failCurrentKey);
+    tx.get(failPrevKey);
+
+    const results = await tx.exec();
+
+    const challengeCurrent = this.asInt(results?.[2]?.[1]);
+    const challengePrev = this.asInt(results?.[3]?.[1]);
+    const failCurrent = this.asInt(results?.[4]?.[1]);
+    const failPrev = this.asInt(results?.[5]?.[1]);
+
+    const windowProgress =
+      (now % (RateWindowService.WINDOW_SECONDS * 1000)) /
+      (RateWindowService.WINDOW_SECONDS * 1000);
+
+    return {
+      rpm: challengePrev * (1 - windowProgress) + challengeCurrent,
+      failRpm: failPrev * (1 - windowProgress) + failCurrent,
+    };
   }
 
   /**

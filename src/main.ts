@@ -20,10 +20,11 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const config = app.get(ConfigService);
   const corsOrigins = config.get<string>('app.corsOrigins', '*');
+  const trustedProxyMode = config.get<string>('app.trustedProxy', 'cloudflare');
 
-  // Trust Cloudflare / upstream proxy
+  // Configure Express proxy trust boundary from env.
   const expressApp = app.getHttpAdapter().getInstance();
-  expressApp.set('trust proxy', 1);
+  expressApp.set('trust proxy', trustedProxyMode === 'none' ? false : 1);
 
   // Disable X-Powered-By header for security best practice
   app.disable('x-powered-by');

@@ -57,8 +57,12 @@ export class PowService {
     dto: CreateChallengeDto,
     clientIp: string,
   ): Promise<ChallengeResponse> {
-    const { difficultyBits, targetHex } =
-      await this.difficulty.calculate(clientIp);
+    const { rpm, failRpm } =
+      await this.rateWindow.incrementChallengeAndGetRates(clientIp);
+    const { difficultyBits, targetHex } = this.difficulty.calculateFromSignals(
+      rpm,
+      failRpm,
+    );
     const ttlSeconds = this.config.get<number>('pow.challengeTtlSeconds')!;
 
     const id = crypto.randomUUID();
@@ -79,7 +83,6 @@ export class PowService {
     };
 
     await this.challengeStore.save(challenge);
-    await this.rateWindow.incrementChallengeCount(clientIp);
     await this.metrics.recordChallengeIssued(difficultyBits);
 
     this.logger.debug(
@@ -107,13 +110,9 @@ export class PowService {
     // IP binding check
     if (challenge.clientIp !== clientIp) throw PowErrors.challengeIpMismatch();
 
-    // Suspicious solve-time check
-    const solveTimeMs = dto.clientMetrics?.solveTimeMs;
-    if (
-      this.minSolveTimeMs > 0 &&
-      solveTimeMs != null &&
-      solveTimeMs < this.minSolveTimeMs
-    ) {
+    // Suspicious solve-time check (server-observed timing is authoritative).
+    const serverSolveTimeMs = Math.max(0, Date.now() - challenge.issuedAt);
+    if (this.minSolveTimeMs > 0 && serverSolveTimeMs < this.minSolveTimeMs) {
       await this.rateWindow.incrementFailureCount(clientIp);
       throw PowErrors.solveTooFast();
     }
@@ -144,7 +143,7 @@ export class PowService {
 
     // Consume challenge (prevents replay)
     await this.challengeStore.consume(challenge.id);
-    await this.metrics.recordVerificationSuccess(solveTimeMs);
+    await this.metrics.recordVerificationSuccess(serverSolveTimeMs);
 
     const { token, expiresAt } = this.token.issue(
       challenge.clientIp,
