@@ -6,9 +6,13 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { extractClientIp } from '../../../../common/utils/proxy-ip.util';
+import {
+  extractClientIp,
+  TrustedProxyMode,
+} from '../../../../common/utils/proxy-ip.util';
 import { CreateChallengeDto } from './dto/create-challenge.dto';
 import { IntrospectTokenDto } from './dto/introspect-token.dto';
 import { VerifyChallengeDto } from './dto/verify-challenge.dto';
@@ -17,7 +21,16 @@ import { PowService } from './pow.service';
 @ApiTags('pow')
 @Controller('pow')
 export class PowController {
-  constructor(private readonly pow: PowService) {}
+  private readonly trustedProxyMode: TrustedProxyMode;
+
+  constructor(
+    private readonly pow: PowService,
+    private readonly config: ConfigService,
+  ) {
+    const raw = this.config.get<string>('app.trustedProxy', 'cloudflare');
+    this.trustedProxyMode =
+      raw === 'none' || raw === 'x-forwarded-for' ? raw : 'cloudflare';
+  }
 
   // ── Challenge issuance ──────────────────────────────────────────────────
 
@@ -43,7 +56,10 @@ export class PowController {
   })
   @ApiResponse({ status: 400, description: 'Validation error' })
   issueChallenge(@Body() dto: CreateChallengeDto, @Req() req: Request) {
-    return this.pow.issueChallenge(dto, extractClientIp(req));
+    return this.pow.issueChallenge(
+      dto,
+      extractClientIp(req, this.trustedProxyMode),
+    );
   }
 
   // ── Proof verification ──────────────────────────────────────────────────
@@ -73,7 +89,10 @@ export class PowController {
   })
   @ApiResponse({ status: 409, description: 'Too many failed attempts' })
   verifyChallenge(@Body() dto: VerifyChallengeDto, @Req() req: Request) {
-    return this.pow.verifyChallenge(dto, extractClientIp(req));
+    return this.pow.verifyChallenge(
+      dto,
+      extractClientIp(req, this.trustedProxyMode),
+    );
   }
 
   // ── Token introspection ─────────────────────────────────────────────────

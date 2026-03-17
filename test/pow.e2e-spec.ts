@@ -5,7 +5,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import * as crypto from 'crypto';
 import request, { Response } from 'supertest';
 import { AppModule } from './../src/app.module';
-import { AllExceptionsFilter } from '../src/common/filters/global-exceptions.filter';
+import { GlobalExceptionsFilter } from '../src/common/filters/global-exceptions.filter';
 
 interface ChallengeApiResponse {
   challengeId: string;
@@ -62,11 +62,20 @@ function solveChallenge(id: string, seed: string, target: string): string {
   throw new Error('Could not solve challenge within iteration budget');
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const MIN_SOLVE_WAIT_MS = 60;
+
 describe('PoW E2E', () => {
   let app: INestApplication;
   let httpServer: Server;
 
   beforeAll(async () => {
+    process.env.POW_BASE_DIFFICULTY_BITS = '16';
+    process.env.POW_MAX_DIFFICULTY_BITS = '20';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -82,7 +91,7 @@ describe('PoW E2E', () => {
         transform: true,
       }),
     );
-    app.useGlobalFilters(new AllExceptionsFilter());
+    app.useGlobalFilters(new GlobalExceptionsFilter());
     await app.init();
     httpServer = app.getHttpServer() as Server;
   });
@@ -145,6 +154,8 @@ describe('PoW E2E', () => {
         challenge.target,
       );
 
+      await delay(MIN_SOLVE_WAIT_MS);
+
       // 3. Verify
       const verifyRes = await request(httpServer)
         .post('/v1/pow/verifications')
@@ -168,6 +179,7 @@ describe('PoW E2E', () => {
         .expect(201);
 
       const { challengeId } = bodyOf<ChallengeApiResponse>(challengeRes);
+      await delay(MIN_SOLVE_WAIT_MS);
       const res = await request(httpServer)
         .post('/v1/pow/verifications')
         .send({ challengeId, nonce: 'definitely-wrong-nonce-000' })
@@ -189,6 +201,8 @@ describe('PoW E2E', () => {
         challenge.seed,
         challenge.target,
       );
+
+      await delay(MIN_SOLVE_WAIT_MS);
 
       // First use — should succeed
       await request(httpServer)
@@ -258,6 +272,8 @@ describe('PoW E2E', () => {
         challenge.seed,
         challenge.target,
       );
+
+      await delay(MIN_SOLVE_WAIT_MS);
 
       const verifyRes = await request(httpServer)
         .post('/v1/pow/verifications')

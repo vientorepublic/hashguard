@@ -49,6 +49,13 @@ export class DifficultyService {
       this.rateWindow.getFailureRatePerMinute(ip),
     ]);
 
+    return this.calculateFromSignals(rpm, failRpm);
+  }
+
+  /**
+   * Calculates difficulty from precomputed challenge/failure rate signals.
+   */
+  calculateFromSignals(rpm: number, failRpm: number): DifficultyResult {
     const rateTier = RATE_TIERS.find((tier) => rpm >= tier.minRpm)!;
     const failPenalty = Math.floor(failRpm / 5) * 2;
 
