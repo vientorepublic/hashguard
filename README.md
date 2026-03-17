@@ -157,6 +157,7 @@ Key configuration is documented in `.env.example`.
 - `POW_MAX_DIFFICULTY_BITS`: Maximum difficulty
 - `POW_MIN_SOLVE_TIME_MS`: Threshold for flagging abnormally fast solves (server-observed solve time)
 - `POW_MAX_FAILURES_PER_CHALLENGE`: Allowed failures per challenge
+- `METRICS_MAX_DIFFICULTY_DISTRIBUTION_KEYS `: Max keys for difficulty distribution metrics
 
 ### Generating a Secure HMAC Signing Key
 
