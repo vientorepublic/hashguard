@@ -168,7 +168,7 @@ export class PowService {
     return {
       valid: true,
       subject: payload.sub,
-      context: payload.ctx,
+      context: payload.context,
       issuedAt: new Date(payload.iat * 1000).toISOString(),
       expiresAt: new Date(payload.exp * 1000).toISOString(),
     };

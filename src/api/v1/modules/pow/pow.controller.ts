@@ -122,6 +122,10 @@ export class PowController {
   })
   @ApiResponse({ status: 401, description: 'Token invalid or expired' })
   @ApiResponse({ status: 409, description: 'Token already consumed' })
+  @ApiResponse({
+    status: 503,
+    description: 'Token state could not be verified safely',
+  })
   introspectToken(@Body() dto: IntrospectTokenDto) {
     return this.pow.introspectToken(dto);
   }

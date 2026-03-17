@@ -64,4 +64,11 @@ export const PowErrors = {
       'POW_TOKEN_ALREADY_USED',
       'Proof token has already been consumed',
     ),
+
+  tokenStateUnavailable: () =>
+    powError(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      'POW_TOKEN_STATE_UNAVAILABLE',
+      'Token state could not be verified safely',
+    ),
 } as const;

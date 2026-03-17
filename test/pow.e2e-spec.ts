@@ -169,6 +169,7 @@ describe('PoW E2E', () => {
       const body = bodyOf<VerificationApiResponse>(verifyRes);
 
       expect(typeof body.proofToken).toBe('string');
+      expect(body.proofToken.split('.')).toHaveLength(3);
       expect(typeof body.expiresAt).toBe('string');
     });
 
@@ -313,6 +314,22 @@ describe('PoW E2E', () => {
         .expect(409);
 
       expect(bodyOf<ErrorApiResponse>(res).code).toBe('POW_TOKEN_ALREADY_USED');
+    });
+
+    it('should allow only one successful consume under concurrent requests', async () => {
+      const token = await obtainToken();
+
+      const [a, b] = await Promise.all([
+        request(httpServer)
+          .post('/v1/pow/assertions/introspect')
+          .send({ proofToken: token, consume: true }),
+        request(httpServer)
+          .post('/v1/pow/assertions/introspect')
+          .send({ proofToken: token, consume: true }),
+      ]);
+
+      const statuses = [a.status, b.status].sort((x, y) => x - y);
+      expect(statuses).toEqual([200, 409]);
     });
 
     it('should inspect without consuming when consume=false', async () => {
