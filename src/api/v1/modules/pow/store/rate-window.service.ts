@@ -39,19 +39,6 @@ export class RateWindowService {
   }
 
   /**
-   * Increments the challenge-request counter for the given IP.
-   * Call this each time a new challenge is issued to an IP.
-   */
-  async incrementChallengeCount(ip: string): Promise<void> {
-    const epoch = this.currentWindowEpoch();
-    const key = this.windowKey(ip, epoch);
-    const pipeline = this.redis.pipeline();
-    pipeline.incr(key);
-    pipeline.expire(key, RateWindowService.KEY_TTL_SECONDS);
-    await pipeline.exec();
-  }
-
-  /**
    * Returns a smoothed requests-per-minute value for the given IP.
    * Uses the weighted average of the current and previous window counts.
    */
@@ -95,19 +82,18 @@ export class RateWindowService {
     const failPrevKey = `rate:failures:${ip}:${prevEpoch}`;
 
     const tx = this.redis.multi();
-    tx.incr(challengeCurrentKey);
-    tx.expire(challengeCurrentKey, RateWindowService.KEY_TTL_SECONDS);
-    tx.get(challengeCurrentKey);
-    tx.get(challengePrevKey);
-    tx.get(failCurrentKey);
-    tx.get(failPrevKey);
+    tx.incr(challengeCurrentKey); // [0] new count
+    tx.expire(challengeCurrentKey, RateWindowService.KEY_TTL_SECONDS); // [1]
+    tx.get(challengePrevKey); // [2]
+    tx.get(failCurrentKey); // [3]
+    tx.get(failPrevKey); // [4]
 
     const results = await tx.exec();
 
-    const challengeCurrent = this.asInt(results?.[2]?.[1]);
-    const challengePrev = this.asInt(results?.[3]?.[1]);
-    const failCurrent = this.asInt(results?.[4]?.[1]);
-    const failPrev = this.asInt(results?.[5]?.[1]);
+    const challengeCurrent = this.asInt(results?.[0]?.[1]); // reuse INCR result directly
+    const challengePrev = this.asInt(results?.[2]?.[1]);
+    const failCurrent = this.asInt(results?.[3]?.[1]);
+    const failPrev = this.asInt(results?.[4]?.[1]);
 
     const windowProgress =
       (now % (RateWindowService.WINDOW_SECONDS * 1000)) /
@@ -122,14 +108,18 @@ export class RateWindowService {
   /**
    * Increments the verification-failure counter for the given IP.
    * High failure rates are used as an abuse signal.
+   *
+   * Uses MULTI/EXEC to guarantee that EXPIRE always runs after INCR.
+   * A pipeline() race (INCR succeeds, EXPIRE dropped on disconnect) would
+   * leave a TTL-less key that accumulates indefinitely.
    */
   async incrementFailureCount(ip: string): Promise<void> {
     const epoch = this.currentWindowEpoch();
     const key = `rate:failures:${ip}:${epoch}`;
-    const pipeline = this.redis.pipeline();
-    pipeline.incr(key);
-    pipeline.expire(key, RateWindowService.KEY_TTL_SECONDS);
-    await pipeline.exec();
+    const tx = this.redis.multi();
+    tx.incr(key);
+    tx.expire(key, RateWindowService.KEY_TTL_SECONDS);
+    await tx.exec();
   }
 
   async getFailureRatePerMinute(ip: string): Promise<number> {
