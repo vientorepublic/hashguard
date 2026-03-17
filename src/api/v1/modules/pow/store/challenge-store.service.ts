@@ -52,14 +52,21 @@ export class ChallengeStoreService {
   }
 
   /**
-   * Increments the failure counter for a challenge.
-   * Returns the new failure count.
+   * Atomically increments the failure counter for a challenge.
+   * TTL is aligned to the challenge's remaining lifetime so the
+   * failure key never outlives the challenge itself.
+   *
+   * @param remainingSeconds - Seconds until the parent challenge expires.
+   * @returns The new failure count.
    */
-  async incrementFailures(id: string): Promise<number> {
-    const pipeline = this.redis.pipeline();
-    pipeline.incr(this.failKey(id));
-    pipeline.expire(this.failKey(id), this.ttlSeconds);
-    const results = await pipeline.exec();
+  async incrementFailures(
+    id: string,
+    remainingSeconds: number,
+  ): Promise<number> {
+    const tx = this.redis.multi();
+    tx.incr(this.failKey(id));
+    tx.expire(this.failKey(id), Math.max(remainingSeconds, 1));
+    const results = await tx.exec();
     return (results?.[0]?.[1] as number) ?? 1;
   }
 

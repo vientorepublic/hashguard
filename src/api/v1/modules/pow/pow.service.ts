@@ -126,8 +126,13 @@ export class PowService {
     );
 
     if (!valid) {
+      const remainingSeconds = Math.max(
+        Math.ceil((challenge.expiresAt - Date.now()) / 1000),
+        1,
+      );
       const failures = await this.challengeStore.incrementFailures(
         challenge.id,
+        remainingSeconds,
       );
       await this.rateWindow.incrementFailureCount(clientIp);
       await this.metrics.recordVerificationFailure();
