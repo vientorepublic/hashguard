@@ -40,10 +40,22 @@ The default policy is `1 solve = 1 protected request` (single-use).
 
 ### Difficulty Calculation
 
-- Input signals: Requests per minute (RPM) by IP, failures per minute
+- Input signals: sustained RPM (1-minute weighted window), burst RPM (10-second window × 6), and failure rate per minute — all per IP
 - Base difficulty: `POW_BASE_DIFFICULTY_BITS`
 - Max difficulty: `POW_MAX_DIFFICULTY_BITS`
-- As RPM and failure rates increase, additional bits are added to raise the difficulty.
+- `effectiveRpm = max(sustainedRpm, burstRpm)` — bursts are penalised immediately without waiting for the 1-minute window to fill
+- `extraBits` are added from `POW_RATE_TIERS_JSON` based on `effectiveRpm`; each 5 failure RPM adds an additional 2 bits
+- If sustained RPM exceeds `POW_MAX_CHALLENGE_RPM`, challenge issuance is rejected with `429` before any Redis write
+
+Default rate tier table (overridable via `POW_RATE_TIERS_JSON`):
+
+| RPM threshold | Extra bits |
+| ------------- | ---------- |
+| ≥ 30          | +6         |
+| ≥ 20          | +4         |
+| ≥ 10          | +2         |
+| ≥ 5           | +1         |
+| < 5           | +0         |
 
 ## Quick Start
 
@@ -157,14 +169,16 @@ Key configuration is documented in `.env.example`.
 - `TRUSTED_PROXY`: `cloudflare | x-forwarded-for | none`
 - `CORS_ORIGINS`: Allowed origins (`*` or comma-separated)
 - `REDIS_*`: Redis connection details
-- `POW_CHALLENGE_TTL_SECONDS`: Challenge validity period
-- `POW_PROOF_TOKEN_TTL_SECONDS`: Proof token validity period
+- `POW_CHALLENGE_TTL_SECONDS`: Challenge validity period (default: `120`)
+- `POW_PROOF_TOKEN_TTL_SECONDS`: Proof token validity period (default: `300`)
 - `POW_TOKEN_SECRET`: Proof token signing key
-- `POW_BASE_DIFFICULTY_BITS`: Base difficulty
-- `POW_MAX_DIFFICULTY_BITS`: Maximum difficulty
-- `POW_MIN_SOLVE_TIME_MS`: Threshold for flagging abnormally fast solves (server-observed solve time)
-- `POW_MAX_FAILURES_PER_CHALLENGE`: Allowed failures per challenge
-- `METRICS_MAX_DIFFICULTY_DISTRIBUTION_KEYS `: Max keys for difficulty distribution metrics
+- `POW_BASE_DIFFICULTY_BITS`: Base difficulty (default: `20`)
+- `POW_MAX_DIFFICULTY_BITS`: Maximum difficulty (default: `32`)
+- `POW_MIN_SOLVE_TIME_MS`: Threshold for flagging abnormally fast solves, server-observed (default: `50`)
+- `POW_MAX_FAILURES_PER_CHALLENGE`: Allowed failures per challenge before it is consumed (default: `10`)
+- `POW_MAX_CHALLENGE_RPM`: Per-IP challenge issuance rate limit; requests above this threshold receive `429` (default: `60`)
+- `POW_RATE_TIERS_JSON`: JSON array overriding the default RPM → extra-bits mapping. Must be sorted descending by `minRpm` or will be sorted automatically. Example: `[{"minRpm":30,"extraBits":6},{"minRpm":0,"extraBits":0}]`
+- `METRICS_MAX_DIFFICULTY_DISTRIBUTION_KEYS`: Max keys for difficulty distribution metrics (default: `64`)
 
 ### Generating a Secure HMAC Signing Key
 
@@ -224,7 +238,10 @@ npm run test:e2e -- --runInBand
 - Token consumption is enforced atomically in Redis to prevent concurrent replay acceptance.
 - If Redis cannot confirm token usage state, token verification fails closed with `503` to protect integrity.
 - If behind Cloudflare, configure the `CF-Connecting-IP` header trust chain correctly.
-- Tune difficulty values (`BASE/MAX`) based on client device performance and traffic patterns.
+- Tune difficulty values (`BASE/MAX`) based on client device performance and traffic patterns. The default max is 32 bits (~4 billion hashes); lower this if targeting low-powered clients such as mobile browsers.
+- Use `POW_RATE_TIERS_JSON` to adjust rate thresholds at runtime without redeploying.
+- Challenge TTL defaults to 120 seconds. Keeping it short limits the window for pre-computed challenge attacks.
+- `POW_MAX_CHALLENGE_RPM` acts as a hard issuance gate before any Redis writes, protecting the server under heavy burst traffic.
 
 ## Current Scope & Future Extensions
 

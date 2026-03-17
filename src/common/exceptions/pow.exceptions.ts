@@ -71,4 +71,11 @@ export const PowErrors = {
       'POW_TOKEN_STATE_UNAVAILABLE',
       'Token state could not be verified safely',
     ),
+
+  challengeRateLimited: () =>
+    powError(
+      HttpStatus.TOO_MANY_REQUESTS,
+      'POW_CHALLENGE_RATE_LIMITED',
+      'Challenge issuance rate limit exceeded for this IP',
+    ),
 } as const;

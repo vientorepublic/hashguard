@@ -36,6 +36,12 @@ export interface IntrospectResponse {
   expiresAt?: string;
 }
 
+interface ChallengeRateSignals {
+  rpm: number;
+  failRpm: number;
+  burstRpm: number;
+}
+
 @Injectable()
 export class PowService {
   private readonly logger = new Logger(PowService.name);
@@ -57,11 +63,18 @@ export class PowService {
     dto: CreateChallengeDto,
     clientIp: string,
   ): Promise<ChallengeResponse> {
-    const { rpm, failRpm } =
+    const { rpm, failRpm, burstRpm }: ChallengeRateSignals =
       await this.rateWindow.incrementChallengeAndGetRates(clientIp);
+
+    const maxChallengeRpm = this.config.get<number>('pow.maxChallengeRpm')!;
+    if (rpm > maxChallengeRpm) {
+      throw PowErrors.challengeRateLimited();
+    }
+
     const { difficultyBits, targetHex } = this.difficulty.calculateFromSignals(
       rpm,
       failRpm,
+      burstRpm,
     );
     const ttlSeconds = this.config.get<number>('pow.challengeTtlSeconds')!;
 

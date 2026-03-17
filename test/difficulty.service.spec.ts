@@ -13,10 +13,15 @@ function makeConfig(base = 20, max = 26): ConfigService {
   } as unknown as ConfigService;
 }
 
-function makeRateWindow(rpm: number, failRpm = 0): RateWindowService {
+function makeRateWindow(
+  rpm: number,
+  failRpm = 0,
+  burstRpm = 0,
+): RateWindowService {
   return {
     getChallengeRequestsPerMinute: jest.fn().mockResolvedValue(rpm),
     getFailureRatePerMinute: jest.fn().mockResolvedValue(failRpm),
+    getBurstRequestsPerMinute: jest.fn().mockResolvedValue(burstRpm),
   } as unknown as RateWindowService;
 }
 
@@ -103,5 +108,45 @@ describe('DifficultyService', () => {
     const result = await svc.calculate('1.2.3.4');
     expect(result.targetHex).toHaveLength(64);
     expect(/^[0-9a-f]{64}$/.test(result.targetHex)).toBe(true);
+  });
+
+  it('should use burst rpm when it exceeds sustained rpm', async () => {
+    // sustained rpm=2 (base tier), burstRpm=30 → tier +6 bits
+    const svc = new DifficultyService(
+      makeConfig(20, 32),
+      makeRateWindow(2, 0, 30),
+      hash,
+    );
+    const result = await svc.calculate('1.2.3.4');
+    expect(result.difficultyBits).toBe(26); // base + 6 from burst tier
+  });
+
+  it('should use sustained rpm when it exceeds burst rpm', async () => {
+    // sustained rpm=20 (tier +4), burstRpm=5 → sustained wins
+    const svc = new DifficultyService(
+      makeConfig(20, 32),
+      makeRateWindow(20, 0, 5),
+      hash,
+    );
+    const result = await svc.calculate('1.2.3.4');
+    expect(result.difficultyBits).toBe(24); // base + 4
+  });
+
+  it('should accept custom rate tiers from config', () => {
+    const tiersJson = JSON.stringify([
+      { minRpm: 10, extraBits: 8 },
+      { minRpm: 0, extraBits: 0 },
+    ]);
+    const config = {
+      get: (key: string) => {
+        if (key === 'pow.baseDifficultyBits') return 20;
+        if (key === 'pow.maxDifficultyBits') return 32;
+        if (key === 'pow.rateTiersJson') return tiersJson;
+        return undefined;
+      },
+    } as unknown as ConfigService;
+    const svc = new DifficultyService(config, makeRateWindow(10), hash);
+    const result = svc.calculateFromSignals(10, 0);
+    expect(result.difficultyBits).toBe(28); // base 20 + custom 8
   });
 });
