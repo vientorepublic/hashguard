@@ -32,6 +32,12 @@ The default policy is `1 solve = 1 protected request` (single-use).
 - `GET /v1/metrics/pow`: Operational metrics snapshot
 - `GET /v1/health`, `GET /v1/health/liveness`: Health checks
 
+### Proof Token Format
+
+- Proof token is a JWT (`header.payload.signature`) signed with HMAC-SHA256 (`HS256`).
+- Core claims: `jti` (token ID), `sub` (client IP), `context`, `iat`, `exp`.
+- Tokens are short-lived and single-use by policy.
+
 ### Difficulty Calculation
 
 - Input signals: Requests per minute (RPM) by IP, failures per minute
@@ -141,6 +147,7 @@ curl -s -X POST http://localhost:3000/v1/pow/assertions/introspect \
 
 - `consume=true` (default): Token is consumed on successful verification
 - `consume=false`: Read-only verification
+- If token usage state cannot be verified safely (e.g., Redis failure), introspection returns `503 POW_TOKEN_STATE_UNAVAILABLE` (fail-closed policy).
 
 ## Environment Variables
 
@@ -189,6 +196,11 @@ Recommendations:
 - Do not commit keys to Git.
 - When rotating keys, note that existing proof tokens will become invalid, so plan accordingly.
 
+Runtime enforcement:
+
+- `POW_TOKEN_SECRET` must be at least 32 bytes.
+- In production, startup fails if `POW_TOKEN_SECRET` is left as the default placeholder.
+
 ## Testing
 
 ### Unit Tests
@@ -208,7 +220,9 @@ npm run test:e2e -- --runInBand
 ## Security & Operations
 
 - In production, always replace `POW_TOKEN_SECRET` with a strong random value.
-- The default policy uses single-use tokens; ensure your resource servers don't allow reuse.
+- Proof tokens are JWT (HS256) and the default policy is single-use (`consume=true`).
+- Token consumption is enforced atomically in Redis to prevent concurrent replay acceptance.
+- If Redis cannot confirm token usage state, token verification fails closed with `503` to protect integrity.
 - If behind Cloudflare, configure the `CF-Connecting-IP` header trust chain correctly.
 - Tune difficulty values (`BASE/MAX`) based on client device performance and traffic patterns.
 

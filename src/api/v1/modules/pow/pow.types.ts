@@ -15,7 +15,7 @@ export interface StoredChallenge {
 export interface ProofTokenPayload {
   jti: string; // unique token ID (UUID)
   sub: string; // client IP
-  ctx: string; // context string from challenge
+  context: string; // context string from challenge
   iat: number; // issued at (Unix seconds)
   exp: number; // expires at (Unix seconds)
 }

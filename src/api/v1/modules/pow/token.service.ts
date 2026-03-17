@@ -1,10 +1,15 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import Redis from 'ioredis';
 import { PowErrors } from '../../../../common/exceptions/pow.exceptions';
 import { REDIS_CLIENT } from '../../../../modules/redis/redis.module';
 import { ProofTokenPayload } from './pow.types';
+
+interface JwtHeader {
+  alg: 'HS256';
+  typ: 'JWT';
+}
 
 @Injectable()
 export class TokenService {
@@ -16,8 +21,21 @@ export class TokenService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly config: ConfigService,
   ) {
-    this.secret = Buffer.from(config.get<string>('pow.tokenSecret')!);
+    const rawSecret = config.get<string>('pow.tokenSecret')!;
+    this.secret = Buffer.from(rawSecret, 'utf8');
     this.ttlSeconds = config.get<number>('pow.proofTokenTtlSeconds')!;
+
+    if (this.secret.length < 32) {
+      throw new Error('POW_TOKEN_SECRET must be at least 32 bytes');
+    }
+
+    const nodeEnv = config.get<string>('app.nodeEnv', 'development');
+    if (
+      nodeEnv === 'production' &&
+      rawSecret === 'CHANGE_ME_IN_PRODUCTION_use_32_plus_random_bytes'
+    ) {
+      throw new Error('POW_TOKEN_SECRET must be explicitly set in production');
+    }
   }
 
   /** Issues a new single-use proof token bound to `ip` and `context`. */
@@ -26,15 +44,23 @@ export class TokenService {
     const payload: ProofTokenPayload = {
       jti: crypto.randomUUID(),
       sub: ip,
-      ctx: context,
+      context,
       iat: nowSec,
       exp: nowSec + this.ttlSeconds,
     };
 
-    const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    const sig = this.sign(data);
+    const header: JwtHeader = { alg: 'HS256', typ: 'JWT' };
+    const encodedHeader = Buffer.from(JSON.stringify(header)).toString(
+      'base64url',
+    );
+    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString(
+      'base64url',
+    );
+    const signingInput = `${encodedHeader}.${encodedPayload}`;
+    const sig = this.sign(signingInput);
+
     return {
-      token: `${data}.${sig}`,
+      token: `${signingInput}.${sig}`,
       expiresAt: payload.exp * 1000, // return as Unix ms
     };
   }
@@ -49,23 +75,42 @@ export class TokenService {
    */
   async verify(token: string, consume = true): Promise<ProofTokenPayload> {
     const parts = token.split('.');
-    if (parts.length !== 2) throw PowErrors.tokenInvalid();
+    if (parts.length !== 3) throw PowErrors.tokenInvalid();
 
-    const [data, sig] = parts;
+    const [encodedHeader, encodedPayload, sig] = parts;
+    const signingInput = `${encodedHeader}.${encodedPayload}`;
 
     // 1. Signature check (constant-time comparison)
-    const expectedSig = this.sign(data);
+    const expectedSig = this.sign(signingInput);
     if (!this.timingSafeCompare(sig, expectedSig)) {
       throw PowErrors.tokenInvalid();
     }
 
-    // 2. Decode payload
+    // 2. Decode header + payload
+    let header: JwtHeader;
     let payload: ProofTokenPayload;
     try {
+      header = JSON.parse(
+        Buffer.from(encodedHeader, 'base64url').toString(),
+      ) as JwtHeader;
       payload = JSON.parse(
-        Buffer.from(data, 'base64url').toString(),
+        Buffer.from(encodedPayload, 'base64url').toString(),
       ) as ProofTokenPayload;
     } catch {
+      throw PowErrors.tokenInvalid();
+    }
+
+    if (header.alg !== 'HS256' || header.typ !== 'JWT') {
+      throw PowErrors.tokenInvalid();
+    }
+
+    if (
+      !payload.jti ||
+      !payload.sub ||
+      typeof payload.context !== 'string' ||
+      !payload.iat ||
+      !payload.exp
+    ) {
       throw PowErrors.tokenInvalid();
     }
 
@@ -75,21 +120,44 @@ export class TokenService {
       throw PowErrors.tokenExpired();
     }
 
-    // 4. Replay check
+    // 4. Replay check / consume
     const usedKey = `token:used:${payload.jti}`;
-    const isUsed = await this.redis.exists(usedKey);
-    if (isUsed) throw PowErrors.tokenAlreadyUsed();
+    const remaining = payload.exp - nowSec;
+    const ttlSeconds = Math.max(remaining + 60, 60);
 
-    // 5. Consume if requested
     if (consume) {
-      const remaining = payload.exp - nowSec;
       try {
-        await this.redis.set(usedKey, '1', 'EX', Math.max(remaining + 60, 60));
-      } catch (err) {
-        // Fail open: log but don't block the legitimate request
-        this.logger.error(
-          `Failed to mark token ${payload.jti} as used: ${(err as Error).message}`,
+        const consumed = await this.redis.set(
+          usedKey,
+          '1',
+          'EX',
+          ttlSeconds,
+          'NX',
         );
+        if (consumed !== 'OK') {
+          throw PowErrors.tokenAlreadyUsed();
+        }
+      } catch (err) {
+        if (err instanceof HttpException) {
+          throw err;
+        }
+        this.logger.error(
+          `Failed to atomically consume token ${payload.jti}: ${(err as Error).message}`,
+        );
+        throw PowErrors.tokenStateUnavailable();
+      }
+    } else {
+      try {
+        const isUsed = await this.redis.exists(usedKey);
+        if (isUsed) throw PowErrors.tokenAlreadyUsed();
+      } catch (err) {
+        if (err instanceof HttpException) {
+          throw err;
+        }
+        this.logger.error(
+          `Failed to verify token usage state ${payload.jti}: ${(err as Error).message}`,
+        );
+        throw PowErrors.tokenStateUnavailable();
       }
     }
 
