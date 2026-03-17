@@ -38,4 +38,10 @@ export default () => ({
       10,
     ),
   },
+  metrics: {
+    maxDifficultyDistributionKeys: parseInt(
+      process.env.METRICS_MAX_DIFFICULTY_DISTRIBUTION_KEYS ?? '64',
+      10,
+    ),
+  },
 });
