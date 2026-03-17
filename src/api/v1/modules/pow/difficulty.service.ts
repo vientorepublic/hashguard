@@ -13,6 +13,12 @@ interface RateTier {
   extraBits: number;
 }
 
+interface DifficultySignalsProvider {
+  getChallengeRequestsPerMinute(ip: string): Promise<number>;
+  getFailureRatePerMinute(ip: string): Promise<number>;
+  getBurstRequestsPerMinute(ip: string): Promise<number>;
+}
+
 /**
  * Default rate → extra difficulty bits mapping (used when POW_RATE_TIERS_JSON is not set).
  * Entries are sorted in descending order of minRpm.
@@ -67,11 +73,13 @@ export class DifficultyService {
    *  4. Clamp to [baseBits, maxBits].
    */
   async calculate(ip: string): Promise<DifficultyResult> {
-    const [rpm, failRpm, burstRpm] = await Promise.all([
-      this.rateWindow.getChallengeRequestsPerMinute(ip),
-      this.rateWindow.getFailureRatePerMinute(ip),
-      this.rateWindow.getBurstRequestsPerMinute(ip),
-    ]);
+    const signalsProvider = this.rateWindow as DifficultySignalsProvider;
+    const [rpm, failRpm, burstRpm]: [number, number, number] =
+      await Promise.all([
+        signalsProvider.getChallengeRequestsPerMinute(ip),
+        signalsProvider.getFailureRatePerMinute(ip),
+        signalsProvider.getBurstRequestsPerMinute(ip),
+      ]);
 
     return this.calculateFromSignals(rpm, failRpm, burstRpm);
   }
