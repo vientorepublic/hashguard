@@ -19,6 +19,9 @@ interface DifficultySignalsProvider {
   getBurstRequestsPerMinute(ip: string): Promise<number>;
 }
 
+const DIFFICULTY_BITS_MIN = 1;
+const DIFFICULTY_BITS_MAX = 255;
+
 /**
  * Default rate → extra difficulty bits mapping (used when POW_RATE_TIERS_JSON is not set).
  * Entries are sorted in descending order of minRpm.
@@ -45,20 +48,83 @@ export class DifficultyService {
   ) {
     this.baseBits = config.get<number>('pow.baseDifficultyBits')!;
     this.maxBits = config.get<number>('pow.maxDifficultyBits')!;
+    this.validateDifficultyBounds(this.baseBits, this.maxBits);
 
     const rawTiers = config.get<string>('pow.rateTiersJson') ?? null;
     try {
       this.rateTiers = rawTiers
-        ? (JSON.parse(rawTiers) as RateTier[])
-            .slice()
-            .sort((a, b) => b.minRpm - a.minRpm)
+        ? this.parseAndValidateRateTiers(rawTiers)
         : DEFAULT_RATE_TIERS;
     } catch {
       this.logger.warn(
-        'POW_RATE_TIERS_JSON is malformed; falling back to default rate tiers',
+        'POW_RATE_TIERS_JSON is malformed or invalid; falling back to default rate tiers',
       );
       this.rateTiers = DEFAULT_RATE_TIERS;
     }
+  }
+
+  private validateDifficultyBounds(baseBits: number, maxBits: number): void {
+    if (!Number.isInteger(baseBits) || !Number.isInteger(maxBits)) {
+      throw new RangeError(
+        'pow.baseDifficultyBits and pow.maxDifficultyBits must be integers',
+      );
+    }
+
+    if (
+      baseBits < DIFFICULTY_BITS_MIN ||
+      baseBits > DIFFICULTY_BITS_MAX ||
+      maxBits < DIFFICULTY_BITS_MIN ||
+      maxBits > DIFFICULTY_BITS_MAX
+    ) {
+      throw new RangeError(
+        `pow difficulty bits must be within [${DIFFICULTY_BITS_MIN}, ${DIFFICULTY_BITS_MAX}]`,
+      );
+    }
+
+    if (baseBits > maxBits) {
+      throw new RangeError(
+        'pow.baseDifficultyBits must be <= pow.maxDifficultyBits',
+      );
+    }
+  }
+
+  private parseAndValidateRateTiers(rawTiers: string): RateTier[] {
+    const parsed = JSON.parse(rawTiers) as unknown;
+
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error('pow.rateTiersJson must be a non-empty array');
+    }
+
+    const tiers = parsed.map((item) => {
+      const minRpm = (item as RateTier).minRpm;
+      const extraBits = (item as RateTier).extraBits;
+
+      if (
+        !Number.isFinite(minRpm) ||
+        !Number.isFinite(extraBits) ||
+        !Number.isInteger(minRpm) ||
+        !Number.isInteger(extraBits)
+      ) {
+        throw new Error(
+          'pow.rateTiersJson entries must use integer minRpm and extraBits',
+        );
+      }
+
+      if (minRpm < 0 || extraBits < 0) {
+        throw new Error('pow.rateTiersJson entries must be non-negative');
+      }
+
+      return { minRpm, extraBits };
+    });
+
+    const sorted = tiers.slice().sort((a, b) => b.minRpm - a.minRpm);
+    if (!sorted.some((tier) => tier.minRpm === 0)) {
+      throw new Error(
+        'pow.rateTiersJson must include a base tier with minRpm=0',
+      );
+    }
+
+    return sorted;
   }
 
   /**
