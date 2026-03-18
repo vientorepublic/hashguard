@@ -13,6 +13,21 @@ function makeConfig(base = 20, max = 26): ConfigService {
   } as unknown as ConfigService;
 }
 
+function makeConfigWithRateTiers(
+  base: number,
+  max: number,
+  rateTiersJson: string,
+): ConfigService {
+  return {
+    get: (key: string) => {
+      if (key === 'pow.baseDifficultyBits') return base;
+      if (key === 'pow.maxDifficultyBits') return max;
+      if (key === 'pow.rateTiersJson') return rateTiersJson;
+      return undefined;
+    },
+  } as unknown as ConfigService;
+}
+
 function makeRateWindow(
   rpm: number,
   failRpm = 0,
@@ -137,16 +152,61 @@ describe('DifficultyService', () => {
       { minRpm: 10, extraBits: 8 },
       { minRpm: 0, extraBits: 0 },
     ]);
-    const config = {
-      get: (key: string) => {
-        if (key === 'pow.baseDifficultyBits') return 20;
-        if (key === 'pow.maxDifficultyBits') return 32;
-        if (key === 'pow.rateTiersJson') return tiersJson;
-        return undefined;
-      },
-    } as unknown as ConfigService;
+    const config = makeConfigWithRateTiers(20, 32, tiersJson);
     const svc = new DifficultyService(config, makeRateWindow(10), hash);
     const result = svc.calculateFromSignals(10, 0);
     expect(result.difficultyBits).toBe(28); // base 20 + custom 8
+  });
+
+  it('should fall back to default tiers when POW_RATE_TIERS_JSON is malformed', () => {
+    const svc = new DifficultyService(
+      makeConfigWithRateTiers(20, 32, '{not-json}'),
+      makeRateWindow(30),
+      hash,
+    );
+    const result = svc.calculateFromSignals(30, 0);
+    expect(result.difficultyBits).toBe(26); // default tier at 30 rpm gives +6
+  });
+
+  it('should fall back to default tiers when custom tiers are empty', () => {
+    const svc = new DifficultyService(
+      makeConfigWithRateTiers(20, 32, '[]'),
+      makeRateWindow(20),
+      hash,
+    );
+    const result = svc.calculateFromSignals(20, 0);
+    expect(result.difficultyBits).toBe(24); // default tier at 20 rpm gives +4
+  });
+
+  it('should fall back to default tiers when minRpm=0 base tier is missing', () => {
+    const svc = new DifficultyService(
+      makeConfigWithRateTiers(
+        20,
+        32,
+        JSON.stringify([{ minRpm: 10, extraBits: 5 }]),
+      ),
+      makeRateWindow(0),
+      hash,
+    );
+    const result = svc.calculateFromSignals(0, 0);
+    expect(result.difficultyBits).toBe(20); // default base tier
+  });
+
+  it('should throw when baseDifficultyBits is below supported range', () => {
+    expect(
+      () => new DifficultyService(makeConfig(0, 20), makeRateWindow(1), hash),
+    ).toThrow(RangeError);
+  });
+
+  it('should throw when maxDifficultyBits is above supported range', () => {
+    expect(
+      () => new DifficultyService(makeConfig(20, 256), makeRateWindow(1), hash),
+    ).toThrow(RangeError);
+  });
+
+  it('should throw when baseDifficultyBits exceeds maxDifficultyBits', () => {
+    expect(
+      () => new DifficultyService(makeConfig(30, 20), makeRateWindow(1), hash),
+    ).toThrow(RangeError);
   });
 });
