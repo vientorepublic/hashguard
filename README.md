@@ -243,6 +243,12 @@ npm run test:e2e -- --runInBand
 - Challenge TTL defaults to 120 seconds. Keeping it short limits the window for pre-computed challenge attacks.
 - `POW_MAX_CHALLENGE_RPM` acts as a hard issuance gate before any Redis writes, protecting the server under heavy burst traffic.
 
+## Integrations
+
+Hashguard can be integrated with official SDK packages to protect any resource endpoint. The SDK handles the challenge/verification flow and token management, while the resource server performs token introspection to authorize requests.
+
+For more info on integration patterns and best practices, see the [Repository](https://github.com/vientorepublic/hashguard-client).
+
 ## Current Scope & Future Extensions
 
 Current scope:
@@ -253,7 +259,7 @@ Current scope:
 
 Future extension ideas:
 
-- Browser/mobile SDKs
+- ~~Browser/mobile SDKs~~
 - Official middleware/guard packages for resource protection services
 - Offline token verification using public key signatures
 
