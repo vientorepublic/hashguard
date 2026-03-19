@@ -87,7 +87,7 @@ export class PowController {
     status: 404,
     description: 'Challenge not found / expired / already used',
   })
-  @ApiResponse({ status: 409, description: 'Too many failed attempts' })
+  @ApiResponse({ status: 429, description: 'Too many failed attempts' })
   verifyChallenge(@Body() dto: VerifyChallengeDto, @Req() req: Request) {
     return this.pow.verifyChallenge(
       dto,

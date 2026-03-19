@@ -67,6 +67,8 @@ function delay(ms: number): Promise<void> {
 }
 
 const MIN_SOLVE_WAIT_MS = 60;
+const TEST_IP_A = '198.51.100.10';
+const TEST_IP_B = '198.51.100.11';
 
 describe('PoW E2E', () => {
   let app: INestApplication;
@@ -134,6 +136,26 @@ describe('PoW E2E', () => {
         .send({ context: '   ' })
         .expect(400);
     });
+
+    it('should enforce per-IP challenge issuance rate limit', async () => {
+      const ip = '198.51.100.99';
+      let last: Response | null = null;
+
+      for (let i = 0; i < 120; i++) {
+        const res = await request(httpServer)
+          .post('/v1/pow/challenges')
+          .set('cf-connecting-ip', ip)
+          .send({});
+        last = res;
+        if (res.status === 429) break;
+      }
+
+      expect(last).not.toBeNull();
+      expect(last?.status).toBe(429);
+      expect(bodyOf<ErrorApiResponse>(last as Response).code).toBe(
+        'POW_CHALLENGE_RATE_LIMITED',
+      );
+    });
   });
 
   // ── Full solve + verify + consume flow ────────────────────────────────
@@ -188,6 +210,101 @@ describe('PoW E2E', () => {
         .expect(400);
 
       expect(bodyOf<ErrorApiResponse>(res).code).toBe('POW_INVALID_PROOF');
+    });
+
+    it('should return 404 for a non-existent challenge id', async () => {
+      await delay(MIN_SOLVE_WAIT_MS);
+      const res = await request(httpServer)
+        .post('/v1/pow/verifications')
+        .send({
+          challengeId: '4a4d8f7b-6aa9-4f90-a854-2d3e9dd4c8c1',
+          nonce: 'validnonce123',
+        })
+        .expect(404);
+
+      expect(bodyOf<ErrorApiResponse>(res).code).toBe(
+        'POW_CHALLENGE_NOT_FOUND',
+      );
+    });
+
+    it('should reject verification from a different client IP', async () => {
+      const challengeRes = await request(httpServer)
+        .post('/v1/pow/challenges')
+        .set('cf-connecting-ip', TEST_IP_A)
+        .send({ context: 'ip-bound-test' })
+        .expect(201);
+
+      const challenge = bodyOf<ChallengeApiResponse>(challengeRes);
+      const nonce = solveChallenge(
+        challenge.challengeId,
+        challenge.seed,
+        challenge.target,
+      );
+
+      await delay(MIN_SOLVE_WAIT_MS);
+
+      const res = await request(httpServer)
+        .post('/v1/pow/verifications')
+        .set('cf-connecting-ip', TEST_IP_B)
+        .send({ challengeId: challenge.challengeId, nonce })
+        .expect(403);
+
+      expect(bodyOf<ErrorApiResponse>(res).code).toBe(
+        'POW_CHALLENGE_IP_MISMATCH',
+      );
+    });
+
+    it('should reject suspiciously fast solves before proof validation', async () => {
+      const challengeRes = await request(httpServer)
+        .post('/v1/pow/challenges')
+        .send({})
+        .expect(201);
+
+      const { challengeId } = bodyOf<ChallengeApiResponse>(challengeRes);
+
+      const res = await request(httpServer)
+        .post('/v1/pow/verifications')
+        .send({ challengeId, nonce: 'validnonce123' })
+        .expect(400);
+
+      expect(bodyOf<ErrorApiResponse>(res).code).toBe('POW_SOLVE_TOO_FAST');
+    });
+
+    it('should consume challenge and return 429 after too many invalid proofs', async () => {
+      const challengeRes = await request(httpServer)
+        .post('/v1/pow/challenges')
+        .send({})
+        .expect(201);
+
+      const { challengeId } = bodyOf<ChallengeApiResponse>(challengeRes);
+      await delay(MIN_SOLVE_WAIT_MS);
+
+      for (let i = 0; i < 4; i++) {
+        const res = await request(httpServer)
+          .post('/v1/pow/verifications')
+          .send({ challengeId, nonce: `wrongnonce${i}` })
+          .expect(400);
+
+        expect(bodyOf<ErrorApiResponse>(res).code).toBe('POW_INVALID_PROOF');
+      }
+
+      const finalRes = await request(httpServer)
+        .post('/v1/pow/verifications')
+        .send({ challengeId, nonce: 'wrongnonce-final' })
+        .expect(429);
+
+      expect(bodyOf<ErrorApiResponse>(finalRes).code).toBe(
+        'POW_TOO_MANY_FAILURES',
+      );
+
+      const replayAfterConsume = await request(httpServer)
+        .post('/v1/pow/verifications')
+        .send({ challengeId, nonce: 'wrongnonce-after-consume' })
+        .expect(404);
+
+      expect(bodyOf<ErrorApiResponse>(replayAfterConsume).code).toBe(
+        'POW_CHALLENGE_NOT_FOUND',
+      );
     });
 
     it('should reject a replay (same challenge used twice)', async () => {
