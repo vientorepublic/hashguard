@@ -7,8 +7,8 @@ describe('validateEnvironment', () => {
 
   it('should pass with valid explicit PoW settings', () => {
     const env = {
-      POW_BASE_DIFFICULTY_BITS: '20',
-      POW_MAX_DIFFICULTY_BITS: '32',
+      POW_BASE_DIFFICULTY_BITS: '21',
+      POW_MAX_DIFFICULTY_BITS: '26',
       POW_CHALLENGE_TTL_SECONDS: '120',
       POW_PROOF_TOKEN_TTL_SECONDS: '300',
       POW_RATE_TIERS_JSON: JSON.stringify([
@@ -24,8 +24,8 @@ describe('validateEnvironment', () => {
   it('should fail when base difficulty exceeds max difficulty', () => {
     expect(() =>
       validateEnvironment({
-        POW_BASE_DIFFICULTY_BITS: '33',
-        POW_MAX_DIFFICULTY_BITS: '32',
+        POW_BASE_DIFFICULTY_BITS: '27',
+        POW_MAX_DIFFICULTY_BITS: '26',
       }),
     ).toThrow('POW_BASE_DIFFICULTY_BITS must be <= POW_MAX_DIFFICULTY_BITS');
   });
