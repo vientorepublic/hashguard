@@ -25,7 +25,7 @@ export default () => ({
       process.env.POW_TOKEN_SECRET ??
       'CHANGE_ME_IN_PRODUCTION_use_32_plus_random_bytes',
     baseDifficultyBits: parseInt(
-      process.env.POW_BASE_DIFFICULTY_BITS ?? '20',
+      process.env.POW_BASE_DIFFICULTY_BITS ?? '21',
       10,
     ),
     maxDifficultyBits: parseInt(

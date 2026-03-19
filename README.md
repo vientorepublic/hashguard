@@ -120,7 +120,7 @@ Example response:
   "challengeId": "f2d8a3b5-...",
   "algorithm": "sha256",
   "seed": "9c0f...",
-  "difficultyBits": 20,
+  "difficultyBits": 21,
   "target": "00000fffff...",
   "issuedAt": "2026-03-16T13:00:00.000Z",
   "expiresAt": "2026-03-16T13:10:00.000Z"
@@ -172,7 +172,7 @@ Key configuration is documented in `.env.example`.
 - `POW_CHALLENGE_TTL_SECONDS`: Challenge validity period (default: `120`)
 - `POW_PROOF_TOKEN_TTL_SECONDS`: Proof token validity period (default: `300`)
 - `POW_TOKEN_SECRET`: Proof token signing key
-- `POW_BASE_DIFFICULTY_BITS`: Base difficulty (default: `20`)
+- `POW_BASE_DIFFICULTY_BITS`: Base difficulty (default: `21`)
 - `POW_MAX_DIFFICULTY_BITS`: Maximum difficulty (default: `32`)
 - `POW_MIN_SOLVE_TIME_MS`: Threshold for flagging abnormally fast solves, server-observed (default: `50`)
 - `POW_MAX_FAILURES_PER_CHALLENGE`: Allowed failures per challenge before it is consumed (default: `10`)
