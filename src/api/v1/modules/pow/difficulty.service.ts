@@ -34,6 +34,10 @@ const DEFAULT_RATE_TIERS: RateTier[] = [
   { minRpm: 0, extraBits: 0 },
 ];
 
+/**
+ * Service responsible for calculating the appropriate Proof-of-Work (PoW) difficulty
+ * for a client IP based on their request rate, failure rate, and burst rate.
+ */
 @Injectable()
 export class DifficultyService {
   private readonly logger = new Logger(DifficultyService.name);
