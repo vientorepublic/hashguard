@@ -73,8 +73,9 @@ describe('PoW E2E', () => {
   let httpServer: Server;
 
   beforeAll(async () => {
-    process.env.POW_BASE_DIFFICULTY_BITS = '16';
+    process.env.POW_BASE_DIFFICULTY_BITS = '20';
     process.env.POW_MAX_DIFFICULTY_BITS = '20';
+    process.env.POW_RATE_TIERS_JSON = '[{"minRpm":0,"extraBits":0}]';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
