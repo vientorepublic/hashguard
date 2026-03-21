@@ -22,6 +22,16 @@ interface VerificationApiResponse {
   expiresAt: string;
 }
 
+interface VerificationKeyApiResponse {
+  kty: 'EC';
+  crv: 'P-256';
+  x: string;
+  y: string;
+  use: 'sig';
+  alg: 'ES256';
+  kid: string;
+}
+
 interface ErrorApiResponse {
   code: string;
   message: string | string[];
@@ -64,6 +74,50 @@ function solveChallenge(id: string, seed: string, target: string): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function base64UrlToBuffer(value: string): Buffer {
+  return Buffer.from(value, 'base64url');
+}
+
+function joseToDer(signature: Buffer): Buffer {
+  if (signature.length !== 64) {
+    throw new Error('Expected a 64-byte JOSE signature for P-256');
+  }
+
+  const encodeInteger = (value: Buffer): Buffer => {
+    let normalized = value;
+    while (normalized.length > 1 && normalized[0] === 0) {
+      normalized = normalized.subarray(1);
+    }
+    if (normalized[0] & 0x80) {
+      normalized = Buffer.concat([Buffer.from([0]), normalized]);
+    }
+    return Buffer.concat([Buffer.from([0x02, normalized.length]), normalized]);
+  };
+
+  const encodedR = encodeInteger(signature.subarray(0, 32));
+  const encodedS = encodeInteger(signature.subarray(32));
+  const sequence = Buffer.concat([encodedR, encodedS]);
+  return Buffer.concat([Buffer.from([0x30, sequence.length]), sequence]);
+}
+
+function verifyProofTokenSignature(
+  token: string,
+  verificationKey: VerificationKeyApiResponse,
+): boolean {
+  const [encodedHeader, encodedPayload, encodedSignature] = token.split('.');
+  const publicKey = crypto.createPublicKey({
+    key: verificationKey as unknown as crypto.JsonWebKey,
+    format: 'jwk',
+  });
+
+  return crypto.verify(
+    'sha256',
+    Buffer.from(`${encodedHeader}.${encodedPayload}`, 'utf8'),
+    publicKey,
+    joseToDer(base64UrlToBuffer(encodedSignature)),
+  );
 }
 
 const MIN_SOLVE_WAIT_MS = 60;
@@ -191,9 +245,24 @@ describe('PoW E2E', () => {
 
       const body = bodyOf<VerificationApiResponse>(verifyRes);
 
+      const keyRes = await request(httpServer)
+        .get('/v1/pow/assertions/verification-key')
+        .expect(200);
+
+      const verificationKey = bodyOf<VerificationKeyApiResponse>(keyRes);
+      const decodedHeader = JSON.parse(
+        base64UrlToBuffer(body.proofToken.split('.')[0]).toString('utf8'),
+      ) as { alg: string; typ: string; kid: string };
+
       expect(typeof body.proofToken).toBe('string');
       expect(body.proofToken.split('.')).toHaveLength(3);
       expect(typeof body.expiresAt).toBe('string');
+      expect(decodedHeader.alg).toBe('ES256');
+      expect(decodedHeader.typ).toBe('JWT');
+      expect(decodedHeader.kid).toBe(verificationKey.kid);
+      expect(verifyProofTokenSignature(body.proofToken, verificationKey)).toBe(
+        true,
+      );
     });
 
     it('should reject an invalid nonce with 400 POW_INVALID_PROOF', async () => {
@@ -372,6 +441,24 @@ describe('PoW E2E', () => {
           clientMetrics: { solveTimeMs: 12.5 },
         })
         .expect(400);
+    });
+  });
+
+  describe('GET /v1/pow/assertions/verification-key', () => {
+    it('should return a public ES256 JWK', async () => {
+      const res = await request(httpServer)
+        .get('/v1/pow/assertions/verification-key')
+        .expect(200);
+
+      const body = bodyOf<VerificationKeyApiResponse>(res);
+
+      expect(body.kty).toBe('EC');
+      expect(body.crv).toBe('P-256');
+      expect(body.use).toBe('sig');
+      expect(body.alg).toBe('ES256');
+      expect(typeof body.kid).toBe('string');
+      expect(body.x).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(body.y).toMatch(/^[A-Za-z0-9_-]+$/);
     });
   });
 

@@ -21,9 +21,8 @@ export default () => ({
       process.env.POW_PROOF_TOKEN_TTL_SECONDS ?? '300',
       10,
     ),
-    tokenSecret:
-      process.env.POW_TOKEN_SECRET ??
-      'CHANGE_ME_IN_PRODUCTION_use_32_plus_random_bytes',
+    tokenPrivateKeyPem: process.env.POW_TOKEN_PRIVATE_KEY_PEM,
+    tokenPrivateKeyBase64: process.env.POW_TOKEN_PRIVATE_KEY_BASE64,
     baseDifficultyBits: parseInt(
       process.env.POW_BASE_DIFFICULTY_BITS ?? '21',
       10,

@@ -11,7 +11,11 @@ import { HashService } from './hash.service';
 import { ChallengeStoreService } from './store/challenge-store.service';
 import { RateWindowService } from './store/rate-window.service';
 import { TokenService } from './token.service';
-import { ProofTokenPayload, StoredChallenge } from './pow.types';
+import {
+  ProofTokenPayload,
+  ProofTokenVerificationKey,
+  StoredChallenge,
+} from './pow.types';
 
 export interface ChallengeResponse {
   challengeId: string;
@@ -35,6 +39,8 @@ export interface IntrospectResponse {
   issuedAt?: string;
   expiresAt?: string;
 }
+
+export type VerificationKeyResponse = ProofTokenVerificationKey;
 
 interface ChallengeRateSignals {
   rpm: number;
@@ -190,5 +196,9 @@ export class PowService {
       issuedAt: new Date(payload.iat * 1000).toISOString(),
       expiresAt: new Date(payload.exp * 1000).toISOString(),
     };
+  }
+
+  getVerificationKey(): VerificationKeyResponse {
+    return this.token.getVerificationKey();
   }
 }

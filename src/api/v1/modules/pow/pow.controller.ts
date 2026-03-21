@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -17,16 +18,25 @@ import { CreateChallengeDto } from './dto/create-challenge.dto';
 import { IntrospectTokenDto } from './dto/introspect-token.dto';
 import { VerifyChallengeDto } from './dto/verify-challenge.dto';
 import { PowService } from './pow.service';
+import type { VerificationKeyResponse } from './pow.service';
+import { TokenService } from './token.service';
+
+interface VerificationKeyProvider {
+  getVerificationKey(): VerificationKeyResponse;
+}
 
 @ApiTags('pow')
 @Controller('pow')
 export class PowController {
   private readonly trustedProxyMode: TrustedProxyMode;
+  private readonly verificationKeyProvider: VerificationKeyProvider;
 
   constructor(
     private readonly pow: PowService,
+    token: TokenService,
     private readonly config: ConfigService,
   ) {
+    this.verificationKeyProvider = token;
     const raw = this.config.get<string>('app.trustedProxy', 'cloudflare');
     this.trustedProxyMode =
       raw === 'none' || raw === 'x-forwarded-for' ? raw : 'cloudflare';
@@ -96,6 +106,32 @@ export class PowController {
   }
 
   // ── Token introspection ─────────────────────────────────────────────────
+
+  @Get('assertions/verification-key')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get the public JWK for stateless proof-token verification',
+    description:
+      'SDKs can fetch this EC P-256 public key and verify proof-token JWT signatures locally without a server round-trip.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Public JWK used to verify ES256 proof-token signatures.',
+    schema: {
+      example: {
+        kty: 'EC',
+        crv: 'P-256',
+        x: 'v8xGz4mM2jvM0xv7e9j7V0rF6qWf2Lx6Fv0t3P3m1lA',
+        y: 'N3QvK7t6Q2mWjzYp6Qj0yQ8l4lP5sT7m9kQ3jL5rX2c',
+        use: 'sig',
+        alg: 'ES256',
+        kid: '4hJz5J6Nq1v8X0a9S9o4XzU3fS0S6WqXb8vR8vK2p0Q',
+      },
+    },
+  })
+  getVerificationKey(): VerificationKeyResponse {
+    return this.verificationKeyProvider.getVerificationKey();
+  }
 
   @Post('assertions/introspect')
   @HttpCode(HttpStatus.OK)
