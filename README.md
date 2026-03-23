@@ -161,6 +161,14 @@ curl -s -X POST http://localhost:3000/v1/pow/assertions/introspect \
 - `consume=false`: Read-only verification
 - If token usage state cannot be verified safely (e.g., Redis failure), introspection returns `503 POW_TOKEN_STATE_UNAVAILABLE` (fail-closed policy).
 
+### 5) Fetch Public Verification Key
+
+```bash
+curl -s http://localhost:3000/v1/pow/assertions/verification-key
+```
+
+The response is an ES256 public JWK. SDKs can cache it and verify proof-token signatures statelessly without sending each token back to HashGuard.
+
 ## Environment Variables
 
 Key configuration is documented in `.env.example`.
@@ -171,7 +179,8 @@ Key configuration is documented in `.env.example`.
 - `REDIS_*`: Redis connection details
 - `POW_CHALLENGE_TTL_SECONDS`: Challenge validity period (default: `120`)
 - `POW_PROOF_TOKEN_TTL_SECONDS`: Proof token validity period (default: `300`)
-- `POW_TOKEN_SECRET`: Proof token signing key
+- `POW_TOKEN_PRIVATE_KEY_PEM`: PKCS#8 PEM private key used to sign ES256 proof tokens
+- `POW_TOKEN_PRIVATE_KEY_BASE64`: Base64-encoded PKCS#8 PEM private key; use this if multiline env vars are inconvenient
 - `POW_BASE_DIFFICULTY_BITS`: Base difficulty (default: `21`)
 - `POW_MAX_DIFFICULTY_BITS`: Maximum difficulty (default: `26`)
 - `POW_MIN_SOLVE_TIME_MS`: Threshold for flagging abnormally fast solves, server-observed (default: `50`)
@@ -180,40 +189,44 @@ Key configuration is documented in `.env.example`.
 - `POW_RATE_TIERS_JSON`: JSON array overriding the default RPM → extra-bits mapping. Must be sorted descending by `minRpm` or will be sorted automatically. Example: `[{"minRpm":30,"extraBits":6},{"minRpm":0,"extraBits":0}]`
 - `METRICS_MAX_DIFFICULTY_DISTRIBUTION_KEYS`: Max keys for difficulty distribution metrics (default: `64`)
 
-### Generating a Secure HMAC Signing Key
+### Generating an ES256 Signing Key
 
-In production, replace the human-readable string in `POW_TOKEN_SECRET` with a sufficiently long random byte-based key.
+In development and tests, HashGuard generates an ephemeral P-256 key pair automatically if no private key is configured.
+In production, set exactly one of `POW_TOKEN_PRIVATE_KEY_PEM` or `POW_TOKEN_PRIVATE_KEY_BASE64`.
 
 Example using OpenSSL:
 
 ```bash
-openssl rand -base64 32
+openssl ecparam -name prime256v1 -genkey -noout -out hashguard-es256-key.pem
+openssl pkcs8 -topk8 -nocrypt -in hashguard-es256-key.pem -out hashguard-es256-key.pk8.pem
 ```
 
-For longer keys, use 48 or 64 bytes:
-
-```bash
-openssl rand -base64 48
-openssl rand -base64 64
-```
-
-Place the generated value directly in `.env`:
+To place the PEM directly in `.env`, escape newlines:
 
 ```env
-POW_TOKEN_SECRET=GENERATED_RANDOM_STRING
+POW_TOKEN_PRIVATE_KEY_PEM="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+```
+
+Or base64-encode the PKCS#8 PEM and use:
+
+```bash
+base64 < hashguard-es256-key.pk8.pem | tr -d '\n'
+```
+
+```env
+POW_TOKEN_PRIVATE_KEY_BASE64=<base64-of-pkcs8-pem>
 ```
 
 Recommendations:
 
-- Use at least 32 bytes of random data.
+- Keep the private key out of source control.
 - Use different keys for development, staging, and production environments.
-- Do not commit keys to Git.
 - When rotating keys, note that existing proof tokens will become invalid, so plan accordingly.
 
 Runtime enforcement:
 
-- `POW_TOKEN_SECRET` must be at least 32 bytes.
-- In production, startup fails if `POW_TOKEN_SECRET` is left as the default placeholder.
+- In production, startup fails unless one private key variable is set.
+- `POW_TOKEN_PRIVATE_KEY_PEM` and `POW_TOKEN_PRIVATE_KEY_BASE64` are mutually exclusive.
 
 ## Testing
 
@@ -233,8 +246,9 @@ npm run test:e2e -- --runInBand
 
 ## Security & Operations
 
-- In production, always replace `POW_TOKEN_SECRET` with a strong random value.
-- Proof tokens are JWT (HS256) and the default policy is single-use (`consume=true`).
+- In production, always set an explicit ES256 private signing key.
+- Proof tokens are JWT (ES256) and the default policy is single-use (`consume=true`).
+- Clients can verify token integrity statelessly with `/v1/pow/assertions/verification-key`, but only introspection can confirm single-use state.
 - Token consumption is enforced atomically in Redis to prevent concurrent replay acceptance.
 - If Redis cannot confirm token usage state, token verification fails closed with `503` to protect integrity.
 - If behind Cloudflare, configure the `CF-Connecting-IP` header trust chain correctly.

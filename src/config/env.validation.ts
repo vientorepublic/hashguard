@@ -90,6 +90,14 @@ function validateRateTiersJson(raw: string, errors: string[]): void {
 export function validateEnvironment(env: EnvMap): EnvMap {
   const errors: string[] = [];
 
+  const tokenPrivateKeyPem = env.POW_TOKEN_PRIVATE_KEY_PEM;
+  const tokenPrivateKeyBase64 = env.POW_TOKEN_PRIVATE_KEY_BASE64;
+  if (tokenPrivateKeyPem != null && tokenPrivateKeyBase64 != null) {
+    errors.push(
+      'Only one of POW_TOKEN_PRIVATE_KEY_PEM or POW_TOKEN_PRIVATE_KEY_BASE64 may be set',
+    );
+  }
+
   const trustedProxy = env.TRUSTED_PROXY;
   if (trustedProxy != null) {
     const trustedProxyValue = toScalarString(trustedProxy);

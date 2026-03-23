@@ -4,38 +4,57 @@ import * as crypto from 'crypto';
 import Redis from 'ioredis';
 import { PowErrors } from '../../../../common/exceptions/pow.exceptions';
 import { REDIS_CLIENT } from '../../../../modules/redis/redis.module';
-import { ProofTokenPayload } from './pow.types';
+import { ProofTokenPayload, ProofTokenVerificationKey } from './pow.types';
 
 interface JwtHeader {
-  alg: 'HS256';
+  alg: 'ES256';
   typ: 'JWT';
+  kid: string;
 }
 
 @Injectable()
 export class TokenService {
   private readonly logger = new Logger(TokenService.name);
-  private readonly secret: Buffer;
+  private readonly privateKey: crypto.KeyObject;
+  private readonly publicKey: crypto.KeyObject;
+  private readonly verificationKey: ProofTokenVerificationKey;
+  private readonly keyId: string;
   private readonly ttlSeconds: number;
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly config: ConfigService,
   ) {
-    const rawSecret = config.get<string>('pow.tokenSecret')!;
-    this.secret = Buffer.from(rawSecret, 'utf8');
     this.ttlSeconds = config.get<number>('pow.proofTokenTtlSeconds')!;
-
-    if (this.secret.length < 32) {
-      throw new Error('POW_TOKEN_SECRET must be at least 32 bytes');
-    }
-
     const nodeEnv = config.get<string>('app.nodeEnv', 'development');
-    if (
-      nodeEnv === 'production' &&
-      rawSecret === 'CHANGE_ME_IN_PRODUCTION_use_32_plus_random_bytes'
-    ) {
-      throw new Error('POW_TOKEN_SECRET must be explicitly set in production');
+
+    const configuredPem = this.resolvePrivateKeyPem(
+      config.get<string>('pow.tokenPrivateKeyPem'),
+      config.get<string>('pow.tokenPrivateKeyBase64'),
+    );
+
+    if (configuredPem) {
+      this.privateKey = this.createPrivateKey(configuredPem);
+    } else if (nodeEnv === 'production') {
+      throw new Error(
+        'POW_TOKEN_PRIVATE_KEY_PEM or POW_TOKEN_PRIVATE_KEY_BASE64 must be set in production',
+      );
+    } else {
+      const generatedKeyPair = crypto.generateKeyPairSync('ec', {
+        namedCurve: 'prime256v1',
+      });
+      this.privateKey = generatedKeyPair.privateKey;
+      this.logger.warn(
+        'Generated ephemeral ES256 proof-token signing key because no private key was configured.',
+      );
     }
+
+    this.publicKey = crypto.createPublicKey(this.privateKey);
+    this.keyId = this.computeKeyId(this.publicKey);
+    this.verificationKey = this.exportVerificationKey(
+      this.publicKey,
+      this.keyId,
+    );
   }
 
   /** Issues a new single-use proof token bound to `ip` and `context`. */
@@ -49,7 +68,7 @@ export class TokenService {
       exp: nowSec + this.ttlSeconds,
     };
 
-    const header: JwtHeader = { alg: 'HS256', typ: 'JWT' };
+    const header: JwtHeader = { alg: 'ES256', typ: 'JWT', kid: this.keyId };
     const encodedHeader = Buffer.from(JSON.stringify(header)).toString(
       'base64url',
     );
@@ -80,9 +99,8 @@ export class TokenService {
     const [encodedHeader, encodedPayload, sig] = parts;
     const signingInput = `${encodedHeader}.${encodedPayload}`;
 
-    // 1. Signature check (constant-time comparison)
-    const expectedSig = this.sign(signingInput);
-    if (!this.timingSafeCompare(sig, expectedSig)) {
+    // 1. Signature check
+    if (!this.verifySignature(signingInput, sig)) {
       throw PowErrors.tokenInvalid();
     }
 
@@ -100,7 +118,11 @@ export class TokenService {
       throw PowErrors.tokenInvalid();
     }
 
-    if (header.alg !== 'HS256' || header.typ !== 'JWT') {
+    if (
+      header.alg !== 'ES256' ||
+      header.typ !== 'JWT' ||
+      header.kid !== this.keyId
+    ) {
       throw PowErrors.tokenInvalid();
     }
 
@@ -164,21 +186,93 @@ export class TokenService {
     return payload;
   }
 
-  private sign(data: string): string {
-    return crypto
-      .createHmac('sha256', this.secret)
-      .update(data)
-      .digest('base64url');
+  getVerificationKey(): ProofTokenVerificationKey {
+    return { ...this.verificationKey };
   }
 
-  private timingSafeCompare(a: string, b: string): boolean {
-    const bufA = Buffer.from(a);
-    const bufB = Buffer.from(b);
-    if (bufA.length !== bufB.length) {
-      // Perform dummy comparison to normalise timing, then reject
-      crypto.timingSafeEqual(bufA, bufA);
+  private sign(data: string): string {
+    return crypto
+      .sign('sha256', Buffer.from(data, 'utf8'), {
+        key: this.privateKey,
+        dsaEncoding: 'ieee-p1363',
+      })
+      .toString('base64url');
+  }
+
+  private verifySignature(data: string, encodedSignature: string): boolean {
+    const signature = Buffer.from(encodedSignature, 'base64url');
+    if (signature.length === 0) {
       return false;
     }
-    return crypto.timingSafeEqual(bufA, bufB);
+
+    return crypto.verify(
+      'sha256',
+      Buffer.from(data, 'utf8'),
+      {
+        key: this.publicKey,
+        dsaEncoding: 'ieee-p1363',
+      },
+      signature,
+    );
+  }
+
+  private resolvePrivateKeyPem(
+    rawPem?: string,
+    rawBase64?: string,
+  ): string | undefined {
+    if (rawPem) {
+      return rawPem.replace(/\\n/g, '\n').trim();
+    }
+
+    if (rawBase64) {
+      return Buffer.from(rawBase64, 'base64').toString('utf8').trim();
+    }
+
+    return undefined;
+  }
+
+  private createPrivateKey(pem: string): crypto.KeyObject {
+    try {
+      return crypto.createPrivateKey({ key: pem, format: 'pem' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid ES256 private key configuration: ${message}`);
+    }
+  }
+
+  private computeKeyId(publicKey: crypto.KeyObject): string {
+    const spkiDer = publicKey.export({ type: 'spki', format: 'der' });
+    return crypto.createHash('sha256').update(spkiDer).digest('base64url');
+  }
+
+  private exportVerificationKey(
+    publicKey: crypto.KeyObject,
+    kid: string,
+  ): ProofTokenVerificationKey {
+    const exported = publicKey.export({ format: 'jwk' }) as {
+      kty?: string;
+      crv?: string;
+      x?: string;
+      y?: string;
+    };
+
+    if (
+      exported.kty !== 'EC' ||
+      exported.crv !== 'P-256' ||
+      !exported.x ||
+      !exported.y
+    ) {
+      throw new Error('Failed to export ES256 verification key as JWK');
+    }
+
+    return {
+      kty: 'EC',
+      crv: 'P-256',
+      x: exported.x,
+      y: exported.y,
+      use: 'sig',
+      alg: 'ES256',
+      kid,
+    };
   }
 }

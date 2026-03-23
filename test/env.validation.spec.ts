@@ -80,4 +80,15 @@ describe('validateEnvironment', () => {
       'POW_CHALLENGE_TTL_SECONDS should not exceed POW_PROOF_TOKEN_TTL_SECONDS',
     );
   });
+
+  it('should fail when both private key env vars are set', () => {
+    expect(() =>
+      validateEnvironment({
+        POW_TOKEN_PRIVATE_KEY_PEM: '-----BEGIN PRIVATE KEY-----',
+        POW_TOKEN_PRIVATE_KEY_BASE64: 'ZmFrZQ==',
+      }),
+    ).toThrow(
+      'Only one of POW_TOKEN_PRIVATE_KEY_PEM or POW_TOKEN_PRIVATE_KEY_BASE64 may be set',
+    );
+  });
 });

@@ -19,3 +19,14 @@ export interface ProofTokenPayload {
   iat: number; // issued at (Unix seconds)
   exp: number; // expires at (Unix seconds)
 }
+
+/** Public JWK clients can use to verify proof-token signatures statelessly. */
+export interface ProofTokenVerificationKey {
+  kty: 'EC';
+  crv: 'P-256';
+  x: string;
+  y: string;
+  use: 'sig';
+  alg: 'ES256';
+  kid: string;
+}
