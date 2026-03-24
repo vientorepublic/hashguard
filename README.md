@@ -29,14 +29,18 @@ The default policy is `1 solve = 1 protected request` (single-use).
 - `POST /v1/pow/challenges`: Issue a challenge
 - `POST /v1/pow/verifications`: Verify nonce and issue proof token
 - `POST /v1/pow/assertions/introspect`: Verify/consume proof token
+- `GET /.well-known/jwks.json`: Public JWKS document for stateless proof-token verification
+- `GET /v1/pow/assertions/verification-key`: Single public JWK (backward-compatible alias)
 - `GET /v1/metrics/pow`: Operational metrics snapshot
 - `GET /v1/health`, `GET /v1/health/liveness`: Health checks
 
 ### Proof Token Format
 
-- Proof token is a JWT (`header.payload.signature`) signed with HMAC-SHA256 (`HS256`).
+- Proof token is a JWT (`header.payload.signature`) signed with ECDSA P-256 (`ES256`).
+- JWT header carries `alg: "ES256"`, `typ: "JWT"`, and `kid` (SHA-256 fingerprint of the SPKI public key).
 - Core claims: `jti` (token ID), `sub` (client IP), `context`, `iat`, `exp`.
 - Tokens are short-lived and single-use by policy.
+- The corresponding public key is exposed as a standard JWKS document at `GET /.well-known/jwks.json`.
 
 ### Difficulty Calculation
 
@@ -277,7 +281,7 @@ Future extension ideas:
 
 - ~~Browser/mobile SDKs~~
 - Official middleware/guard packages for resource protection services
-- Offline token verification using public key signatures
+- ~~Offline token verification using public key signatures~~
 
 ## License
 
