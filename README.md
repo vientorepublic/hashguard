@@ -161,13 +161,15 @@ curl -s -X POST http://localhost:3000/v1/pow/assertions/introspect \
 - `consume=false`: Read-only verification
 - If token usage state cannot be verified safely (e.g., Redis failure), introspection returns `503 POW_TOKEN_STATE_UNAVAILABLE` (fail-closed policy).
 
-### 5) Fetch Public Verification Key
+### 5) Fetch Public Verification Keys
 
 ```bash
-curl -s http://localhost:3000/v1/pow/assertions/verification-key
+curl -s http://localhost:3000/.well-known/jwks.json
 ```
 
-The response is an ES256 public JWK. SDKs can cache it and verify proof-token signatures statelessly without sending each token back to HashGuard.
+The response is a standard JWKS document with a `keys` array. SDKs can cache it and verify proof-token signatures statelessly without sending each token back to HashGuard.
+
+For backward compatibility, HashGuard also keeps exposing the first key as a single JWK at `/v1/pow/assertions/verification-key`.
 
 ## Environment Variables
 
@@ -248,7 +250,7 @@ npm run test:e2e -- --runInBand
 
 - In production, always set an explicit ES256 private signing key.
 - Proof tokens are JWT (ES256) and the default policy is single-use (`consume=true`).
-- Clients can verify token integrity statelessly with `/v1/pow/assertions/verification-key`, but only introspection can confirm single-use state.
+- Clients can verify token integrity statelessly with `/.well-known/jwks.json`, but only introspection can confirm single-use state.
 - Token consumption is enforced atomically in Redis to prevent concurrent replay acceptance.
 - If Redis cannot confirm token usage state, token verification fails closed with `503` to protect integrity.
 - If behind Cloudflare, configure the `CF-Connecting-IP` header trust chain correctly.

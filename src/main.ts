@@ -1,4 +1,4 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -38,7 +38,14 @@ async function bootstrap() {
   });
 
   // Global route prefix
-  app.setGlobalPrefix(API_VERSION);
+  app.setGlobalPrefix(API_VERSION, {
+    exclude: [
+      {
+        path: '.well-known/jwks.json',
+        method: RequestMethod.GET,
+      },
+    ],
+  });
 
   // Global validation pipe
   app.useGlobalPipes(

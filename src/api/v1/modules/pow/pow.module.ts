@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { JwksController } from './jwks.controller';
 import { MetricsModule } from '../metrics/metrics.module';
 import { DifficultyService } from './difficulty.service';
 import { HashService } from './hash.service';
@@ -10,7 +11,7 @@ import { TokenService } from './token.service';
 
 @Module({
   imports: [MetricsModule],
-  controllers: [PowController],
+  controllers: [PowController, JwksController],
   providers: [
     PowService,
     HashService,
