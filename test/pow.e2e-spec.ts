@@ -1,4 +1,8 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  INestApplication,
+  RequestMethod,
+  ValidationPipe,
+} from '@nestjs/common';
 import type { Express } from 'express';
 import type { Server } from 'http';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -30,6 +34,11 @@ interface VerificationKeyApiResponse {
   use: 'sig';
   alg: 'ES256';
   kid: string;
+  key_ops?: ['verify'];
+}
+
+interface JwksApiResponse {
+  keys: VerificationKeyApiResponse[];
 }
 
 interface ErrorApiResponse {
@@ -140,7 +149,9 @@ describe('PoW E2E', () => {
     app = moduleFixture.createNestApplication();
     const expressApp = app.getHttpAdapter().getInstance() as Express;
     expressApp.set('trust proxy', 1);
-    app.setGlobalPrefix('v1');
+    app.setGlobalPrefix('v1', {
+      exclude: [{ path: '.well-known/jwks.json', method: RequestMethod.GET }],
+    });
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -246,10 +257,10 @@ describe('PoW E2E', () => {
       const body = bodyOf<VerificationApiResponse>(verifyRes);
 
       const keyRes = await request(httpServer)
-        .get('/v1/pow/assertions/verification-key')
+        .get('/.well-known/jwks.json')
         .expect(200);
 
-      const verificationKey = bodyOf<VerificationKeyApiResponse>(keyRes);
+      const verificationKey = bodyOf<JwksApiResponse>(keyRes).keys[0];
       const decodedHeader = JSON.parse(
         base64UrlToBuffer(body.proofToken.split('.')[0]).toString('utf8'),
       ) as { alg: string; typ: string; kid: string };
@@ -459,6 +470,30 @@ describe('PoW E2E', () => {
       expect(typeof body.kid).toBe('string');
       expect(body.x).toMatch(/^[A-Za-z0-9_-]+$/);
       expect(body.y).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(body.key_ops).toEqual(['verify']);
+    });
+  });
+
+  describe('GET /.well-known/jwks.json', () => {
+    it('should return a standard JWKS document', async () => {
+      const res = await request(httpServer)
+        .get('/.well-known/jwks.json')
+        .expect(200);
+
+      const body = bodyOf<JwksApiResponse>(res);
+      const verificationKey = body.keys[0];
+
+      expect(Array.isArray(body.keys)).toBe(true);
+      expect(body.keys).toHaveLength(1);
+      expect(verificationKey.kty).toBe('EC');
+      expect(verificationKey.crv).toBe('P-256');
+      expect(verificationKey.use).toBe('sig');
+      expect(verificationKey.alg).toBe('ES256');
+      expect(verificationKey.key_ops).toEqual(['verify']);
+      expect(typeof verificationKey.kid).toBe('string');
+      expect(verificationKey.x).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(verificationKey.y).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(res.headers['content-type']).toContain('application/jwk-set+json');
     });
   });
 

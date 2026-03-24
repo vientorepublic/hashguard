@@ -4,7 +4,11 @@ import * as crypto from 'crypto';
 import Redis from 'ioredis';
 import { PowErrors } from '../../../../common/exceptions/pow.exceptions';
 import { REDIS_CLIENT } from '../../../../modules/redis/redis.module';
-import { ProofTokenPayload, ProofTokenVerificationKey } from './pow.types';
+import {
+  ProofTokenJwks,
+  ProofTokenPayload,
+  ProofTokenVerificationKey,
+} from './pow.types';
 
 interface JwtHeader {
   alg: 'ES256';
@@ -190,6 +194,12 @@ export class TokenService {
     return { ...this.verificationKey };
   }
 
+  getJwks(): ProofTokenJwks {
+    return {
+      keys: [this.getVerificationKey()],
+    };
+  }
+
   private sign(data: string): string {
     return crypto
       .sign('sha256', Buffer.from(data, 'utf8'), {
@@ -273,6 +283,7 @@ export class TokenService {
       use: 'sig',
       alg: 'ES256',
       kid,
+      key_ops: ['verify'],
     };
   }
 }

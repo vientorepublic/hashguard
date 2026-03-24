@@ -12,6 +12,7 @@ import { ChallengeStoreService } from './store/challenge-store.service';
 import { RateWindowService } from './store/rate-window.service';
 import { TokenService } from './token.service';
 import {
+  ProofTokenJwks,
   ProofTokenPayload,
   ProofTokenVerificationKey,
   StoredChallenge,
@@ -41,6 +42,7 @@ export interface IntrospectResponse {
 }
 
 export type VerificationKeyResponse = ProofTokenVerificationKey;
+export type JwksResponse = ProofTokenJwks;
 
 interface ChallengeRateSignals {
   rpm: number;

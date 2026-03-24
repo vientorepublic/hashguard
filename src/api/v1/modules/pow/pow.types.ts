@@ -29,4 +29,10 @@ export interface ProofTokenVerificationKey {
   use: 'sig';
   alg: 'ES256';
   kid: string;
+  key_ops?: ['verify'];
+}
+
+/** Standard JWKS document containing the proof-token verification keys. */
+export interface ProofTokenJwks {
+  keys: ProofTokenVerificationKey[];
 }
