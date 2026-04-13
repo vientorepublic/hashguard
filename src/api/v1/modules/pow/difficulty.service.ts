@@ -13,12 +13,6 @@ interface RateTier {
   extraBits: number;
 }
 
-interface DifficultySignalsProvider {
-  getChallengeRequestsPerMinute(ip: string): Promise<number>;
-  getFailureRatePerMinute(ip: string): Promise<number>;
-  getBurstRequestsPerMinute(ip: string): Promise<number>;
-}
-
 const DIFFICULTY_BITS_MIN = 1;
 const DIFFICULTY_BITS_MAX = 255;
 
@@ -143,12 +137,11 @@ export class DifficultyService {
    *  4. Clamp to [baseBits, maxBits].
    */
   async calculate(ip: string): Promise<DifficultyResult> {
-    const signalsProvider = this.rateWindow as DifficultySignalsProvider;
     const [rpm, failRpm, burstRpm]: [number, number, number] =
       await Promise.all([
-        signalsProvider.getChallengeRequestsPerMinute(ip),
-        signalsProvider.getFailureRatePerMinute(ip),
-        signalsProvider.getBurstRequestsPerMinute(ip),
+        this.rateWindow.getChallengeRequestsPerMinute(ip),
+        this.rateWindow.getFailureRatePerMinute(ip),
+        this.rateWindow.getBurstRequestsPerMinute(ip),
       ]);
 
     return this.calculateFromSignals(rpm, failRpm, burstRpm);
