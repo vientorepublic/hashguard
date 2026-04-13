@@ -5,6 +5,10 @@ services:
       dockerfile: Dockerfile
     container_name: hashguard-api
     restart: unless-stopped
+    networks:
+      - hashguard_internal
+      # Shared network for REST API Gateway (Remove if not needed)
+      - gateway_shared_network
     ports:
       - '127.0.0.1:8000:3000'
     env_file:
@@ -30,8 +34,10 @@ services:
       retries: 10
 
   redis:
-    image: redis:8.4.0
+    image: redis:8.6.2
     restart: unless-stopped
+    networks:
+      - hashguard_internal
     ports:
       - '127.0.0.1:6400:6379'
     command: redis-server --save 60 1 --loglevel warning
@@ -42,6 +48,13 @@ services:
       retries: 10
     volumes:
       - redis_data:/data
+
+networks:
+  hashguard_internal:
+    driver: 'bridge'
+  # Shared network for REST API Gateway (Remove if not needed)
+  gateway_shared_network:
+    external: true
 
 volumes:
   redis_data:
