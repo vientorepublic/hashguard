@@ -63,7 +63,7 @@
   "overrides": {
     "file-type": "22.0.1",
     "@angular-devkit/core": {
-      "ajv": "8.18.0"
+      "ajv": "6.15.0"
     }
   },
   "jest": {
