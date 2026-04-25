@@ -62,7 +62,7 @@ interface HealthApiResponse {
 }
 
 function bodyOf<T>(response: Response): T {
-  return response.body as unknown as T;
+  return response.body as T;
 }
 
 /**

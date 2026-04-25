@@ -246,7 +246,9 @@ export class TokenService {
       return crypto.createPrivateKey({ key: pem, format: 'pem' });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Invalid ES256 private key configuration: ${message}`);
+      throw new Error(`Invalid ES256 private key configuration: ${message}`, {
+        cause: error,
+      });
     }
   }
 
