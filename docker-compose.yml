@@ -34,7 +34,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:8.6.2
+    image: redis:8.6.3
     restart: unless-stopped
     networks:
       - hashguard_internal
