@@ -77,4 +77,8 @@ if (!access.allowed) return rejectRequest();
 
 The SDK passes expected subject/context to introspection and checks both locally and on cached inspection results. Binding mismatches do not spend the token. `consume: false` is read-only inspection and may use a cache; it is not a single-use authorization mechanism. Request-driven unknown-key JWKS refreshes are coalesced and rate-limited to one attempt per 30 seconds per SDK instance, including failed requests. Key rotation can therefore take up to 30 seconds to become visible; an operator can explicitly force-refresh the keyset.
 
-JSON request bodies are limited to 2 KiB in the application bootstrap. Oversize/malformed JSON receives 413/400. Deployments should also apply ingress limits before request parsing.
+JSON request bodies are limited to 4 KiB in the application bootstrap. This bounded limit accommodates an ASCII JWT (up to 2048 bytes), a 128-character context (up to 768 JSON-escaped bytes), the original client IP and field overhead. The previous 2 KiB limit could reject legitimate binding-aware introspection requests for issued tokens. Oversize/malformed JSON receives 413/400. Deployments should also apply ingress limits before request parsing.
+
+## Follow-up validation on 2026-11-16
+
+A dedicated local standalone Redis instance and real HTTP requests passed all 32 E2E tests across three suites. The new production-parser regression exercises an escape-heavy valid context, binding mismatch without consumption, successful single consumption, replay rejection, oversize JSON (413), and malformed JSON (400). Before the limit correction the same regression failed with `expected 200 "OK", got 413 "Payload Too Large"`. This is single-instance local evidence, not a Redis Cluster, multi-replica, outage, mobile-performance, or production-load result.

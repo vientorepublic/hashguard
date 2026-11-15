@@ -34,3 +34,9 @@ All four findings were patched. Locations below refer to the remediation code, n
 - Real Redis/HTTP E2E was **not executed**: the execution sandbox denied binding both TCP and Unix sockets (`Operation not permitted`). Added dedicated real-Redis coverage for single-use assertions, concurrent challenge consumption, atomic limits, failure decay, window carry-over, and no partial debit. These remain unverified against a running Redis service in this session.
 
 No deployment, publication or commit was performed. The review does not establish the document's full production completion criteria: account/session controls, application execution limits, shadow-mode calibration, distributed/cluster and mobile performance validation still require their own integration and runtime evidence. See [adaptive-pow.md](adaptive-pow.md) for the exact implemented contract and rollout settings.
+
+## Follow-up review on 2026-11-16
+
+Exactly one read-only Bugbot-role agent and one read-only Security Review-role agent reviewed server `ef3e937..d71c6ce` and SDK `82d663a..248ee8f`. Bugbot reported one P2 correctness regression at the production JSON body parser: an allowed escaped context generated a binding-aware introspection body above 2 KiB and received 413. The bounded limit is now 4 KiB, shared between production bootstrap and the new HTTP regression suite. Security Review found no high-confidence new exploitable issue; this is not a proof of absence.
+
+This follow-up resolves the earlier session's unexecuted local Redis/HTTP evidence: the existing 29 E2E tests passed against an isolated local Redis before the patch, and all 32 tests including three new parser regressions passed after it. Unit tests remain server 53 and SDK 40 passing. Multi-replica, cluster/failover, execution-time application controls, shadow calibration and mobile p95 remain future validation. No commit, push, publication or deployment was performed in this follow-up.

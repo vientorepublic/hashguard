@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { GlobalExceptionsFilter } from './common/filters/global-exceptions.filter';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { configureJsonBodyParser } from './common/configure-json-body-parser';
 
 // Change this if you want to serve a different API version
 const API_VERSION = 'v1';
@@ -17,7 +18,7 @@ async function bootstrap() {
       ? ['log', 'error', 'warn', 'debug', 'verbose']
       : ['log', 'error', 'warn'],
   });
-  app.useBodyParser('json', { limit: '2kb' });
+  configureJsonBodyParser(app);
   const logger = new Logger('Bootstrap');
   const config = app.get(ConfigService);
   const corsOrigins = config.get<string>('app.corsOrigins', '*');
