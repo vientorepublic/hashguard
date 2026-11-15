@@ -1,3 +1,4 @@
+import { AdaptiveRiskService } from './adaptive-risk.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
@@ -44,6 +45,10 @@ export interface IntrospectResponse {
 export type VerificationKeyResponse = ProofTokenVerificationKey;
 export type JwksResponse = ProofTokenJwks;
 
+export type AssessmentResponse =
+  | { action: 'allow'; riskScore: number; verification: VerificationResponse }
+  | { action: 'challenge'; riskScore: number; challenge: ChallengeResponse };
+
 interface ChallengeRateSignals {
   rpm: number;
   failRpm: number;
@@ -63,14 +68,46 @@ export class PowService {
     private readonly hash: HashService,
     private readonly token: TokenService,
     private readonly metrics: MetricsService,
+    private readonly risk: AdaptiveRiskService,
   ) {
     this.minSolveTimeMs = config.get<number>('pow.minSolveTimeMs')!;
+  }
+
+  async assessRequest(
+    dto: CreateChallengeDto,
+    clientIp: string,
+  ): Promise<AssessmentResponse> {
+    const assessment = await this.risk.assess(clientIp, dto.context ?? '');
+    if (!assessment.challengeRequired) {
+      const { token, expiresAt } = this.token.issue(
+        clientIp,
+        dto.context ?? '',
+      );
+      return {
+        action: 'allow',
+        riskScore: assessment.riskScore,
+        verification: {
+          proofToken: token,
+          expiresAt: new Date(expiresAt).toISOString(),
+        },
+      };
+    }
+    return {
+      action: 'challenge',
+      riskScore: assessment.riskScore,
+      challenge: await this.createChallenge(
+        dto,
+        clientIp,
+        this.difficulty.calculateFromRisk(assessment.riskScore),
+      ),
+    };
   }
 
   async issueChallenge(
     dto: CreateChallengeDto,
     clientIp: string,
   ): Promise<ChallengeResponse> {
+    const assessment = await this.risk.assess(clientIp, dto.context ?? '');
     const { rpm, failRpm, burstRpm }: ChallengeRateSignals =
       await this.rateWindow.incrementChallengeAndGetRates(clientIp);
 
@@ -84,6 +121,26 @@ export class PowService {
       failRpm,
       burstRpm,
     );
+    const riskDifficulty = this.difficulty.calculateFromRisk(
+      assessment.riskScore,
+    );
+    return this.createChallenge(
+      dto,
+      clientIp,
+      riskDifficulty.difficultyBits > difficultyBits
+        ? riskDifficulty
+        : { difficultyBits, targetHex },
+    );
+  }
+
+  private async createChallenge(
+    dto: CreateChallengeDto,
+    clientIp: string,
+    {
+      difficultyBits,
+      targetHex,
+    }: { difficultyBits: number; targetHex: string },
+  ): Promise<ChallengeResponse> {
     const ttlSeconds = this.config.get<number>('pow.challengeTtlSeconds')!;
 
     const id = crypto.randomUUID();
@@ -106,9 +163,7 @@ export class PowService {
     await this.challengeStore.save(challenge);
     await this.metrics.recordChallengeIssued(difficultyBits);
 
-    this.logger.debug(
-      `Challenge issued id=${id} ip=${clientIp} bits=${difficultyBits}`,
-    );
+    this.logger.debug(`Challenge issued id=${id} bits=${difficultyBits}`);
 
     return {
       challengeId: id,
@@ -125,16 +180,24 @@ export class PowService {
     dto: VerifyChallengeDto,
     clientIp: string,
   ): Promise<VerificationResponse> {
+    await this.risk.checkVerificationRate(clientIp);
     const challenge = await this.challengeStore.findById(dto.challengeId);
-    if (!challenge) throw PowErrors.challengeNotFound();
+    if (!challenge || challenge.expiresAt <= Date.now()) {
+      await this.risk.recordFailure(clientIp);
+      throw PowErrors.challengeNotFound();
+    }
 
     // IP binding check
-    if (challenge.clientIp !== clientIp) throw PowErrors.challengeIpMismatch();
+    if (challenge.clientIp !== clientIp) {
+      await this.risk.recordFailure(clientIp);
+      throw PowErrors.challengeIpMismatch();
+    }
 
     // Suspicious solve-time check (server-observed timing is authoritative).
     const serverSolveTimeMs = Math.max(0, Date.now() - challenge.issuedAt);
     if (this.minSolveTimeMs > 0 && serverSolveTimeMs < this.minSolveTimeMs) {
       await this.rateWindow.incrementFailureCount(clientIp);
+      await this.risk.recordFailure(clientIp);
       throw PowErrors.solveTooFast();
     }
 
@@ -156,6 +219,7 @@ export class PowService {
         remainingSeconds,
       );
       await this.rateWindow.incrementFailureCount(clientIp);
+      await this.risk.recordFailure(clientIp);
       await this.metrics.recordVerificationFailure();
 
       if (failures >= this.challengeStore.maxAllowedFailures) {
@@ -168,7 +232,8 @@ export class PowService {
     }
 
     // Consume challenge (prevents replay)
-    await this.challengeStore.consume(challenge.id);
+    if (!(await this.challengeStore.consume(challenge.id)))
+      throw PowErrors.challengeNotFound();
     await this.metrics.recordVerificationSuccess(serverSolveTimeMs);
 
     const { token, expiresAt } = this.token.issue(
@@ -176,7 +241,7 @@ export class PowService {
       challenge.context,
     );
 
-    this.logger.debug(`Challenge verified id=${challenge.id} ip=${clientIp}`);
+    this.logger.debug(`Challenge verified id=${challenge.id}`);
 
     return {
       proofToken: token,
@@ -189,6 +254,7 @@ export class PowService {
     const payload: ProofTokenPayload = await this.token.verify(
       dto.proofToken,
       consume,
+      dto,
     );
 
     return {

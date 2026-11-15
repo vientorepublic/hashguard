@@ -51,6 +51,13 @@ export const PowErrors = {
       'Proof token is invalid or malformed',
     ),
 
+  tokenBindingMismatch: () =>
+    powError(
+      HttpStatus.FORBIDDEN,
+      'POW_TOKEN_BINDING_MISMATCH',
+      'Proof token does not match the expected subject or context',
+    ),
+
   tokenExpired: () =>
     powError(
       HttpStatus.UNAUTHORIZED,

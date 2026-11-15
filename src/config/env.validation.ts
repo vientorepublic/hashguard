@@ -35,7 +35,7 @@ function parseOptionalInt(
     return undefined;
   }
 
-  const value = Number.parseInt(rawString, 10);
+  const value = /^-?\d+$/.test(rawString) ? Number(rawString) : NaN;
   if (!Number.isInteger(value)) {
     errors.push(`${key} must be an integer`);
     return undefined;
@@ -112,6 +112,52 @@ export function validateEnvironment(env: EnvMap): EnvMap {
     }
   }
 
+  for (const key of [
+    'POW_SOFT_LIMIT_UNITS',
+    'POW_HARD_LIMIT_UNITS',
+    'POW_BURST_SOFT_LIMIT_UNITS',
+    'POW_BURST_HARD_LIMIT_UNITS',
+    'POW_MAX_VERIFICATION_RPM',
+  ]) {
+    parseOptionalInt(env, key, errors, 1);
+  }
+  parseOptionalInt(env, 'POW_CHALLENGE_RISK_THRESHOLD', errors, 1, 75);
+  if (
+    env.NODE_ENV === 'production' &&
+    (typeof env.POW_RISK_KEY_SECRET !== 'string' ||
+      env.POW_RISK_KEY_SECRET.length < 32)
+  ) {
+    errors.push(
+      'POW_RISK_KEY_SECRET must contain at least 32 characters in production',
+    );
+  }
+  for (const [soft, hard, defaultSoft, defaultHard] of [
+    ['POW_SOFT_LIMIT_UNITS', 'POW_HARD_LIMIT_UNITS', 30, 120],
+    ['POW_BURST_SOFT_LIMIT_UNITS', 'POW_BURST_HARD_LIMIT_UNITS', 5, 30],
+  ] as const) {
+    if (Number(env[soft] ?? defaultSoft) >= Number(env[hard] ?? defaultHard))
+      errors.push(`${soft} must be < ${hard}`);
+  }
+  if (env.POW_CONTEXT_COSTS_JSON != null) {
+    try {
+      const costs: unknown = JSON.parse(
+        toScalarString(env.POW_CONTEXT_COSTS_JSON) ?? '',
+      );
+      if (
+        !costs ||
+        typeof costs !== 'object' ||
+        Array.isArray(costs) ||
+        Object.values(costs).some(
+          (v) => !Number.isSafeInteger(v) || (v as number) < 1,
+        )
+      )
+        throw new Error();
+    } catch {
+      errors.push(
+        'POW_CONTEXT_COSTS_JSON must be an object with positive integer costs',
+      );
+    }
+  }
   parseOptionalInt(env, 'PORT', errors, 1, 65535);
   parseOptionalInt(env, 'REDIS_PORT', errors, 1, 65535);
   parseOptionalInt(env, 'REDIS_DB', errors, 0);

@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsIP,
   MaxLength,
 } from 'class-validator';
 
@@ -15,6 +16,23 @@ export class IntrospectTokenDto {
   @IsNotEmpty()
   @MaxLength(2048)
   proofToken: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Expected context supplied by the resource backend, checked before consumption',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  expectedContext?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Original client IP supplied by the resource backend, checked before consumption',
+  })
+  @IsOptional()
+  @IsIP()
+  expectedSubject?: string;
 
   @ApiPropertyOptional({
     description:

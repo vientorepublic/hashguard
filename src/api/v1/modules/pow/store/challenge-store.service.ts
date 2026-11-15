@@ -47,8 +47,10 @@ export class ChallengeStoreService {
   }
 
   /** Consume (delete) the challenge so it cannot be reused. */
-  async consume(id: string): Promise<void> {
-    await this.redis.del(this.challengeKey(id), this.failKey(id));
+  async consume(id: string): Promise<boolean> {
+    // DEL's result determines the winner, even if two verifiers read the same record.
+    // Delete only the challenge key so this operation also works in Redis Cluster.
+    return (await this.redis.del(this.challengeKey(id))) === 1;
   }
 
   /**

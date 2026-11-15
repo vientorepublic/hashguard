@@ -96,7 +96,11 @@ export class TokenService {
    * @returns Decoded payload.
    * @throws HttpException on invalid/expired/used tokens.
    */
-  async verify(token: string, consume = true): Promise<ProofTokenPayload> {
+  async verify(
+    token: string,
+    consume = true,
+    expected: { expectedContext?: string; expectedSubject?: string } = {},
+  ): Promise<ProofTokenPayload> {
     const parts = token.split('.');
     if (parts.length !== 3) throw PowErrors.tokenInvalid();
 
@@ -142,8 +146,18 @@ export class TokenService {
 
     // 3. Expiry check
     const nowSec = Math.floor(Date.now() / 1000);
-    if (!payload.exp || payload.exp < nowSec) {
+    if (!payload.exp || payload.exp <= nowSec) {
       throw PowErrors.tokenExpired();
+    }
+
+    // Resource binding must be checked before consuming a valid token.
+    if (
+      (expected.expectedContext !== undefined &&
+        payload.context !== expected.expectedContext) ||
+      (expected.expectedSubject !== undefined &&
+        payload.sub !== expected.expectedSubject)
+    ) {
+      throw PowErrors.tokenBindingMismatch();
     }
 
     // 4. Replay check / consume

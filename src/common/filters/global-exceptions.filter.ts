@@ -33,6 +33,24 @@ export class GlobalExceptionsFilter implements ExceptionFilter {
           (resObj.code as string) ??
           exception.constructor.name.replace('Exception', '').toUpperCase();
       }
+    } else if (
+      exception instanceof Error &&
+      'type' in exception &&
+      (exception.type === 'entity.too.large' ||
+        exception.type === 'entity.parse.failed')
+    ) {
+      status =
+        exception.type === 'entity.too.large'
+          ? HttpStatus.PAYLOAD_TOO_LARGE
+          : HttpStatus.BAD_REQUEST;
+      code =
+        exception.type === 'entity.too.large'
+          ? 'PAYLOAD_TOO_LARGE'
+          : 'INVALID_JSON';
+      message =
+        exception.type === 'entity.too.large'
+          ? 'Request body exceeds the size limit'
+          : 'Invalid JSON body';
     } else if (exception instanceof Error) {
       this.logger.error(
         `Unhandled error: ${exception.message}`,
@@ -40,6 +58,8 @@ export class GlobalExceptionsFilter implements ExceptionFilter {
       );
     }
 
+    if (status === HttpStatus.TOO_MANY_REQUESTS)
+      response.setHeader('Retry-After', '60');
     response.status(status).json({
       statusCode: status,
       code,

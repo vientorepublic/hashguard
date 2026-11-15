@@ -17,10 +17,11 @@ async function bootstrap() {
       ? ['log', 'error', 'warn', 'debug', 'verbose']
       : ['log', 'error', 'warn'],
   });
+  app.useBodyParser('json', { limit: '2kb' });
   const logger = new Logger('Bootstrap');
   const config = app.get(ConfigService);
   const corsOrigins = config.get<string>('app.corsOrigins', '*');
-  const trustedProxyMode = config.get<string>('app.trustedProxy', 'cloudflare');
+  const trustedProxyMode = config.get<string>('app.trustedProxy', 'none');
 
   // Configure Express proxy trust boundary from env.
   const expressApp = app.getHttpAdapter().getInstance();
@@ -64,7 +65,7 @@ async function bootstrap() {
     .setTitle('HashGuard PoW API')
     .setDescription(
       'Proof-of-Work CAPTCHA service to mitigate automated bot attacks. ' +
-        'Clients solve a SHA-256 challenge before accessing protected resources.',
+        'Low-risk clients receive a single-use assertion directly; suspicious traffic receives an adaptive SHA-256 challenge.',
     )
     .setVersion('1.0')
     .addTag('pow', 'Challenge issuance and verification')

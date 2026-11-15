@@ -9,7 +9,7 @@ Hashguard is a general-purpose Proof-of-Work (PoW) CAPTCHA REST API that mitigat
 
 ## How It Works
 
-Hashguard imposes a computational cost (hash computation) on clients for each request, reducing the throughput of attackers per unit time.
+Hashguard evaluates each assertion request. Normal traffic receives a single-use assertion without PoW. Suspicious repeated requests, weighted expensive requests and verification failures trigger a challenge with risk-adjusted difficulty.
 
 As traffic spikes or failure rates increase, difficulty ramps up, forcing bots to consume more CPU/GPU resources to maintain the same request volume.
 
@@ -17,16 +17,17 @@ By using short-TTL, single-use proof tokens, we also reduce replay attacks, cont
 
 ## Core Concepts
 
-1. The client requests and receives a challenge.
+1. The client requests a risk assessment. Low risk receives a token immediately; suspicious traffic receives a challenge.
 2. It searches for a nonce that satisfies `SHA-256(challengeId:seed:nonce) <= target`.
 3. The client submits the nonce to the server. Upon successful verification, it receives a short-lived `proofToken`.
 4. The resource server validates/consumes the `proofToken` via introspection to authorize the request.
 
-The default policy is `1 solve = 1 protected request` (single-use).
+The default policy is `1 assertion = 1 protected request` (single-use), whether allowed normally or after solving work. See [adaptive policy and migration](docs/adaptive-pow.md) for settings, formulas and integration boundaries.
 
 ## Architecture Overview
 
-- `POST /v1/pow/challenges`: Issue a challenge
+- `POST /v1/pow/assessments`: Assess risk and return an assertion or challenge (recommended)
+- `POST /v1/pow/challenges`: Explicitly issue a challenge (legacy)
 - `POST /v1/pow/verifications`: Verify nonce and issue proof token
 - `POST /v1/pow/assertions/introspect`: Verify/consume proof token
 - `GET /.well-known/jwks.json`: Public JWKS document for stateless proof-token verification
@@ -42,14 +43,14 @@ The default policy is `1 solve = 1 protected request` (single-use).
 - Tokens are short-lived and single-use by policy.
 - The corresponding public key is exposed as a standard JWKS document at `GET /.well-known/jwks.json`.
 
-### Difficulty Calculation
+### Legacy Explicit-Challenge Difficulty
 
 - Input signals: sustained RPM (1-minute weighted window), burst RPM (10-second window × 6), and failure rate per minute — all per IP
 - Base difficulty: `POW_BASE_DIFFICULTY_BITS`
 - Max difficulty: `POW_MAX_DIFFICULTY_BITS`
 - `effectiveRpm = max(sustainedRpm, burstRpm)` — bursts are penalised immediately without waiting for the 1-minute window to fill
 - `extraBits` are added from `POW_RATE_TIERS_JSON` based on `effectiveRpm`; each 5 failure RPM adds an additional 2 bits
-- If sustained RPM exceeds `POW_MAX_CHALLENGE_RPM`, challenge issuance is rejected with `429` before any Redis write
+- If sustained RPM exceeds `POW_MAX_CHALLENGE_RPM`, challenge issuance is rejected with `429` before storing a challenge
 
 Default rate tier table (overridable via `POW_RATE_TIERS_JSON`):
 
@@ -180,18 +181,19 @@ For backward compatibility, HashGuard also keeps exposing the first key as a sin
 Key configuration is documented in `.env.example`.
 
 - `PORT`: Server port
-- `TRUSTED_PROXY`: `cloudflare | x-forwarded-for | none`
+- `TRUSTED_PROXY`: `cloudflare | x-forwarded-for | none` (default: `none`; forwarded modes require a restricted origin)
 - `CORS_ORIGINS`: Allowed origins (`*` or comma-separated)
 - `REDIS_*`: Redis connection details
-- `POW_CHALLENGE_TTL_SECONDS`: Challenge validity period (default: `120`)
+- `POW_CHALLENGE_TTL_SECONDS`: Challenge validity period (default: `300`)
 - `POW_PROOF_TOKEN_TTL_SECONDS`: Proof token validity period (default: `300`)
 - `POW_TOKEN_PRIVATE_KEY_PEM`: PKCS#8 PEM private key used to sign ES256 proof tokens
 - `POW_TOKEN_PRIVATE_KEY_BASE64`: Base64-encoded PKCS#8 PEM private key; use this if multiline env vars are inconvenient
-- `POW_BASE_DIFFICULTY_BITS`: Base difficulty (default: `21`)
-- `POW_MAX_DIFFICULTY_BITS`: Maximum difficulty (default: `26`)
-- `POW_MIN_SOLVE_TIME_MS`: Threshold for flagging abnormally fast solves, server-observed (default: `50`)
-- `POW_MAX_FAILURES_PER_CHALLENGE`: Allowed failures per challenge before it is consumed (default: `10`)
-- `POW_MAX_CHALLENGE_RPM`: Per-IP challenge issuance rate limit; requests above this threshold receive `429` (default: `60`)
+- `POW_BASE_DIFFICULTY_BITS`: Base difficulty (default: `16`)
+- `POW_MAX_DIFFICULTY_BITS`: Maximum difficulty (default: `24`)
+- `POW_MIN_SOLVE_TIME_MS`: Threshold for flagging abnormally fast solves, server-observed (default: `0`, disabled)
+- `POW_MAX_FAILURES_PER_CHALLENGE`: Allowed failures per challenge before it is consumed (default: `5`)
+- `POW_RISK_KEY_SECRET`: Shared HMAC secret, required in production (at least 32 characters)
+- `POW_MAX_CHALLENGE_RPM`: Per-IP issuance bucket capacity and per-minute refill quantity (default: `60`); shared by assessments and explicit challenges
 - `POW_RATE_TIERS_JSON`: JSON array overriding the default RPM → extra-bits mapping. Must be sorted descending by `minRpm` or will be sorted automatically. Example: `[{"minRpm":30,"extraBits":6},{"minRpm":0,"extraBits":0}]`
 - `METRICS_MAX_DIFFICULTY_DISTRIBUTION_KEYS`: Max keys for difficulty distribution metrics (default: `64`)
 
