@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Never cancel an in-progress production deployment on a newer main push.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  deploy:
+    name: Deploy production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [checks]
+    uses: ./.github/workflows/deploy-server.yml
+    secrets:
+      VULTR_WIREGUARD: ${{ secrets.VULTR_WIREGUARD }}
+      VULTR_SSH_SECRET: ${{ secrets.VULTR_SSH_SECRET }}

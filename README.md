@@ -288,3 +288,7 @@ Future extension ideas:
 ## License
 
 MIT
+
+## CI and production deployment
+
+See [deployment.md](docs/deployment.md) for CI gates, WireGuard/SSH secrets, `~/hashguard` deployment, release verification and rollback behavior.

@@ -1,0 +1,67 @@
+name: Checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Server — lint, build and Redis E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:8.6.3
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: '6379'
+      REDIS_KEY_PREFIX: 'ci:${{ github.run_id }}:${{ github.run_attempt }}:'
+      POW_RISK_KEY_SECRET: ci-only-risk-secret-not-for-production-32
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.22.1'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint without rewriting files
+        run: npx --no-install eslint '{src,test}/**/*.ts'
+      - name: Type-check
+        run: npx --no-install tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Unit tests
+        run: npm test -- --runInBand
+      - name: Real Redis and HTTP E2E
+        run: npm run test:e2e -- --runInBand
+      - name: Verify Docker image builds
+        run: docker build --build-arg VCS_REF="$GITHUB_SHA" -t hashguard-ci:"$GITHUB_SHA" .
+
+  deployment-tools:
+    name: Deployment tools
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Test deployment and rollback logic
+        run: |
+          bash -n .github/scripts/install-wireguard.sh
+          bash -n .github/scripts/deploy-server.sh
+          python3 -m unittest discover -s tests/ops -v
+      - name: Validate Actions workflows
+        run: |
+          GOBIN="$RUNNER_TEMP/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$RUNNER_TEMP/bin/actionlint" -shellcheck=""
+      - name: Verify WireGuard installer on runner
+        run: bash .github/scripts/install-wireguard.sh
