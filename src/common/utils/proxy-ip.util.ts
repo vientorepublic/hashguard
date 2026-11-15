@@ -12,7 +12,7 @@ export type TrustedProxyMode = 'cloudflare' | 'x-forwarded-for' | 'none';
  */
 export function extractClientIp(
   req: Request,
-  mode: TrustedProxyMode = 'cloudflare',
+  mode: TrustedProxyMode = 'none',
 ): string {
   if (mode === 'cloudflare') {
     const cf = req.headers['cf-connecting-ip'];

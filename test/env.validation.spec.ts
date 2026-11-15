@@ -92,3 +92,30 @@ describe('validateEnvironment', () => {
     );
   });
 });
+
+describe('Adaptive environment validation', () => {
+  it('rejects fractional or trailing-garbage integer settings', () => {
+    for (const value of [
+      '1.5',
+      '30requests',
+      '90071992547409999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999',
+    ]) {
+      expect(() =>
+        validateEnvironment({ POW_SOFT_LIMIT_UNITS: value }),
+      ).toThrow();
+    }
+  });
+  it('requires a shared production identity secret', () => {
+    expect(() => validateEnvironment({ NODE_ENV: 'production' })).toThrow(
+      'POW_RISK_KEY_SECRET',
+    );
+  });
+  it('rejects invalid cost maps and inverted soft/hard bounds', () => {
+    expect(() =>
+      validateEnvironment({ POW_CONTEXT_COSTS_JSON: '{"search":0}' }),
+    ).toThrow('POW_CONTEXT_COSTS_JSON');
+    expect(() => validateEnvironment({ POW_SOFT_LIMIT_UNITS: '120' })).toThrow(
+      'POW_SOFT_LIMIT_UNITS',
+    );
+  });
+});

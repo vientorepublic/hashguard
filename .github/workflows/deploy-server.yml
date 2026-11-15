@@ -1,0 +1,114 @@
+name: Deploy Server
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      VULTR_WIREGUARD:
+        required: true
+      VULTR_SSH_SECRET:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hashguard-production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_HOST: 10.20.0.1
+
+jobs:
+  # A manual deploy has the same gates as the push-driven caller. Calls from CI
+  # already depend on checks and do not duplicate them.
+  manual-checks:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/checks.yml
+
+  deploy:
+    name: WireGuard SSH deployment
+    needs: [manual-checks]
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' &&
+      (needs.manual-checks.result == 'success' || needs.manual-checks.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup WireGuard
+        env:
+          VULTR_WIREGUARD: ${{ secrets.VULTR_WIREGUARD }}
+        run: |
+          set -euo pipefail
+          test -n "$VULTR_WIREGUARD"
+          bash .github/scripts/install-wireguard.sh
+          umask 077
+          printenv VULTR_WIREGUARD > "$RUNNER_TEMP/hashguard-wg0.conf"
+          sudo install -d -m 700 /etc/wireguard
+          sudo install -m 600 "$RUNNER_TEMP/hashguard-wg0.conf" /etc/wireguard/wg0.conf
+          rm -f "$RUNNER_TEMP/hashguard-wg0.conf"
+          sudo wg-quick up wg0
+          for i in $(seq 1 10); do
+            if ping -c 1 -W 2 "$DEPLOY_HOST" >/dev/null 2>&1; then
+              echo "WireGuard tunnel reachable"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "WireGuard tunnel connectivity failed" >&2
+          exit 1
+      - name: Configure root SSH
+        env:
+          VULTR_SSH_SECRET: ${{ secrets.VULTR_SSH_SECRET }}
+          # Optional pinned host keys. Otherwise enroll the host over the
+          # authenticated WireGuard tunnel, never over the public internet.
+          SSH_KNOWN_HOSTS: ${{ vars.VULTR_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$VULTR_SSH_SECRET"
+          umask 077
+          printenv VULTR_SSH_SECRET > "$RUNNER_TEMP/hashguard-deploy-key"
+          ssh-keygen -y -f "$RUNNER_TEMP/hashguard-deploy-key" >/dev/null
+          if test -n "$SSH_KNOWN_HOSTS"; then
+            printenv SSH_KNOWN_HOSTS > "$RUNNER_TEMP/hashguard-known-hosts"
+          else
+            ssh-keyscan -T 10 -t ed25519 "$DEPLOY_HOST" > "$RUNNER_TEMP/hashguard-known-hosts"
+          fi
+          test -s "$RUNNER_TEMP/hashguard-known-hosts"
+          cat > "$RUNNER_TEMP/hashguard-ssh.conf" <<CONFIG
+          Host deploy-target
+              HostName $DEPLOY_HOST
+              User root
+              IdentityFile $RUNNER_TEMP/hashguard-deploy-key
+              IdentitiesOnly yes
+              BatchMode yes
+              StrictHostKeyChecking yes
+              UserKnownHostsFile $RUNNER_TEMP/hashguard-known-hosts
+              ConnectTimeout 10
+              ServerAliveInterval 15
+              ServerAliveCountMax 4
+          CONFIG
+          ssh -F "$RUNNER_TEMP/hashguard-ssh.conf" deploy-target 'test "$(id -u)" = 0 && test -d "$HOME/hashguard/.git" && echo "root SSH and ~/hashguard verified"'
+      - name: Deploy checked commit and verify release
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          config="$RUNNER_TEMP/hashguard-ssh.conf"
+          remote=$(ssh -F "$config" deploy-target 'umask 077; mktemp /tmp/hashguard-deploy.XXXXXXXX')
+          [[ "$remote" =~ ^/tmp/hashguard-deploy\.[[:alnum:]]+$ ]]
+          cleanup() { ssh -F "$config" deploy-target "rm -f -- '$remote'" || true; }
+          trap cleanup EXIT
+          scp -F "$config" .github/scripts/deploy-server.sh "deploy-target:$remote"
+          ssh -F "$config" deploy-target "bash '$remote' '$DEPLOY_SHA'"
+          printf '### Hashguard deployed\n\nCommit: `%s`\n\nTarget: root@%s, ~/hashguard\n' "$DEPLOY_SHA" "$DEPLOY_HOST" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove SSH material and tunnel
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/hashguard-deploy-key" "$RUNNER_TEMP/hashguard-known-hosts" "$RUNNER_TEMP/hashguard-ssh.conf" "$RUNNER_TEMP/hashguard-wg0.conf"
+          if command -v wg-quick >/dev/null; then sudo wg-quick down wg0 || true; fi
+          sudo rm -f /etc/wireguard/wg0.conf

@@ -125,6 +125,19 @@ export class DifficultyService {
     return sorted;
   }
 
+  calculateFromRisk(riskScore: number): DifficultyResult {
+    const bits = Math.max(
+      this.baseBits,
+      Math.min(
+        this.maxBits,
+        Math.round(
+          this.baseBits + (6 * Math.max(0, Math.min(100, riskScore))) / 100,
+        ),
+      ),
+    );
+    return { difficultyBits: bits, targetHex: this.hash.computeTarget(bits) };
+  }
+
   /**
    * Calculates the appropriate PoW difficulty for a client IP.
    *

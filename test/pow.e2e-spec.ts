@@ -138,6 +138,8 @@ describe('PoW E2E', () => {
   let httpServer: Server;
 
   beforeAll(async () => {
+    process.env.TRUSTED_PROXY = 'cloudflare';
+    process.env.POW_MIN_SOLVE_TIME_MS = '50';
     process.env.POW_BASE_DIFFICULTY_BITS = '20';
     process.env.POW_MAX_DIFFICULTY_BITS = '20';
     process.env.POW_RATE_TIERS_JSON = '[{"minRpm":0,"extraBits":0}]';
@@ -218,7 +220,7 @@ describe('PoW E2E', () => {
       expect(last).not.toBeNull();
       expect(last?.status).toBe(429);
       expect(bodyOf<ErrorApiResponse>(last as Response).code).toBe(
-        'POW_CHALLENGE_RATE_LIMITED',
+        'POW_ADAPTIVE_RATE_LIMITED',
       );
     });
   });

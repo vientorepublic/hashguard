@@ -15,6 +15,9 @@ RUN npm prune --omit=dev
 FROM node:24-alpine AS runner
 WORKDIR /app
 
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.revision=$VCS_REF
+
 ENV NODE_ENV=production
 
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json ./

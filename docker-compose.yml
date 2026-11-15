@@ -1,8 +1,11 @@
 services:
   app:
+    image: hashguard-api:${HASHGUARD_DEPLOY_SHA:-local}
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VCS_REF: ${HASHGUARD_DEPLOY_SHA:-unknown}
     container_name: hashguard-api
     restart: unless-stopped
     networks:

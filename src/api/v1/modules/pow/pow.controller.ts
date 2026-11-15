@@ -37,9 +37,35 @@ export class PowController {
     private readonly config: ConfigService,
   ) {
     this.verificationKeyProvider = token;
-    const raw = this.config.get<string>('app.trustedProxy', 'cloudflare');
+    const raw = this.config.get<string>('app.trustedProxy', 'none');
     this.trustedProxyMode =
       raw === 'none' || raw === 'x-forwarded-for' ? raw : 'cloudflare';
+  }
+
+  @Post('assessments')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Assess request risk; issue a single-use assertion or a PoW challenge',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'action=allow includes verification; action=challenge includes challenge. No work is required for allow.',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Hard limit exceeded; solving PoW cannot bypass it.',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'Risk state unavailable; fail closed.',
+  })
+  assessRequest(@Body() dto: CreateChallengeDto, @Req() req: Request) {
+    return this.pow.assessRequest(
+      dto,
+      extractClientIp(req, this.trustedProxyMode),
+    );
   }
 
   // ── Challenge issuance ──────────────────────────────────────────────────

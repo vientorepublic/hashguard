@@ -1,3 +1,4 @@
+import { AdaptiveRiskService } from './adaptive-risk.service';
 import { Module } from '@nestjs/common';
 import { JwksController } from './jwks.controller';
 import { MetricsModule } from '../metrics/metrics.module';
@@ -14,6 +15,7 @@ import { TokenService } from './token.service';
   controllers: [PowController, JwksController],
   providers: [
     PowService,
+    AdaptiveRiskService,
     HashService,
     DifficultyService,
     TokenService,

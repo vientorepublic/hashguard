@@ -36,3 +36,7 @@ pids/
 # Temporary files
 *.tmp
 *.swp
+
+# Python deployment-test cache
+__pycache__/
+*.py[cod]
