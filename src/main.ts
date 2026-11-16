@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { GlobalExceptionsFilter } from './common/filters/global-exceptions.filter';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { configureJsonBodyParser } from './common/configure-json-body-parser';
+import { installGracefulShutdown } from './common/graceful-shutdown';
 
 // Change this if you want to serve a different API version
 const API_VERSION = 'v1';
@@ -18,6 +19,7 @@ async function bootstrap() {
       ? ['log', 'error', 'warn', 'debug', 'verbose']
       : ['log', 'error', 'warn'],
   });
+  installGracefulShutdown(app);
   configureJsonBodyParser(app);
   const logger = new Logger('Bootstrap');
   const config = app.get(ConfigService);

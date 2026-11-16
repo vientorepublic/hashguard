@@ -73,19 +73,23 @@ name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 with open(os.environ['COMMAND_LOG'], 'a') as f: f.write(json.dumps([name] + args) + '\\n')
 if name == 'id': print('0')
+if name == 'sysctl': print(os.getenv('MAP_COUNT', '1048576'))
 if name == 'git':
     if args[0] == 'diff' and os.getenv('DIRTY') == '1': sys.exit(1)
     if args[0] == 'merge-base' and os.getenv('NOT_MAIN') == '1': sys.exit(1)
     if args[0] == 'rev-parse': print(os.environ['SHA'])
 if name == 'docker':
     if args[0] == 'inspect':
+        if args[2] == '{{json .HostConfig}}':
+            print(json.dumps(dict(ReadonlyRootfs=os.getenv('BAD_HARDENING') != '1', CapDrop=['ALL'], SecurityOpt=['no-new-privileges:true'], PidsLimit=256, Tmpfs={'/tmp':'rw,noexec,nosuid,nodev,size=64m,mode=1777'})))
+            sys.exit(0)
         print('sha256:' + 'b'*64 if args[-1] == 'hashguard-api' else ('c'*40 if os.getenv('WRONG_REV') == '1' else os.environ['SHA']))
     if args[:3] == ['compose', 'build', 'app'] and os.getenv('FAIL_BUILD') == '1': sys.exit(1)
     if args[:4] == ['compose', 'ps', '-q', 'app']: print('new-container')
     if args[:2] == ['compose', 'up'] and os.getenv('FAIL_UP') == '1': sys.exit(1)
 if name == 'curl' and os.getenv('FAIL_HEALTH') == '1': sys.exit(22)
 '''
-            for name in ('id', 'git', 'docker', 'curl'):
+            for name in ('id', 'git', 'docker', 'curl', 'sysctl'):
                 file = binary / name
                 file.write_text(shim)
                 file.chmod(0o755)
@@ -107,6 +111,21 @@ if name == 'curl' and os.getenv('FAIL_HEALTH') == '1': sys.exit(22)
         start = next(i for i, row in enumerate(commands) if row[:3] == ['docker', 'compose', 'up'])
         self.assertLess(build, start)
         self.assertFalse(any(row[:3] == ['docker', 'compose', '-f'] for row in commands))
+
+    def test_low_map_count_leaves_running_app_and_checkout_untouched(self):
+        result, commands, state = self.run_flow(MAP_COUNT='262144')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIsNone(state)
+        self.assertIn('vm.max_map_count >= 1048576', result.stderr)
+        self.assertFalse(any(row[0] == 'docker' for row in commands))
+        self.assertFalse(any(row[:2] == ['git', 'checkout'] for row in commands))
+
+    def test_missing_runtime_hardening_rolls_back(self):
+        result, commands, state = self.run_flow(BAD_HARDENING='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIsNone(state)
+        self.assertIn('Previous app image restored', result.stderr)
+        self.assertTrue(any(row[:3] == ['docker', 'compose', '-f'] for row in commands))
 
     def test_build_failure_leaves_running_app_untouched(self):
         result, commands, state = self.run_flow(FAIL_BUILD='1')

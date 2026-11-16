@@ -6,7 +6,9 @@ coverage
 .DS_Store
 
 .env
+.env.*
 *.log
 npm-debug.log*
 
 test
+tests

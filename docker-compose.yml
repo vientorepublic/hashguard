@@ -8,6 +8,16 @@ services:
         VCS_REF: ${HASHGUARD_DEPLOY_SHA:-unknown}
     container_name: hashguard-api
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    pids_limit: 256
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
     networks:
       - hashguard_internal
       # Shared network for REST API Gateway (Remove if not needed)
@@ -19,6 +29,7 @@ services:
         required: false
     environment:
       NODE_ENV: production
+      TZ: Asia/Seoul
       REDIS_HOST: redis
       REDIS_PORT: 6379
     depends_on:

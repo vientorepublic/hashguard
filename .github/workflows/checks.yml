@@ -48,6 +48,23 @@ jobs:
       - name: Verify Docker image builds
         run: docker build --build-arg VCS_REF="$GITHUB_SHA" -t hashguard-ci:"$GITHUB_SHA" .
 
+      - name: Verify hardened runtime and SIGTERM shutdown
+        env:
+          IMAGE: hashguard-ci:${{ github.sha }}
+          SKIP_BUILD: '1'
+        run: bash scripts/test-docker-hardening.sh
+      - name: Verify SIGINT shutdown
+        env:
+          IMAGE: hashguard-ci:${{ github.sha }}
+          SKIP_BUILD: '1'
+          SIGNAL: SIGINT
+        run: bash scripts/test-docker-hardening.sh
+      - name: Verify in-flight HTTP drain before Redis close
+        env:
+          IMAGE: hashguard-ci:${{ github.sha }}
+          SKIP_BUILD: '1'
+        run: bash scripts/test-graceful-shutdown.sh
+
   deployment-tools:
     name: Deployment tools
     runs-on: ubuntu-latest
