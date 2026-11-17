@@ -20,13 +20,13 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.1",
-    "@nestjs/config": "^4.0.3",
-    "@nestjs/core": "^11.0.1",
-    "@nestjs/platform-express": "^11.0.1",
-    "@nestjs/swagger": "^11.2.6",
-    "@nestjs/terminus": "^11.1.1",
-    "@nestjs/throttler": "^6.5.0",
+    "@nestjs/common": "^12.5.1",
+    "@nestjs/config": "^12.1.1",
+    "@nestjs/core": "^12.5.1",
+    "@nestjs/platform-express": "^12.5.1",
+    "@nestjs/swagger": "^12.1.2",
+    "@nestjs/terminus": "^12.2.0",
+    "@nestjs/throttler": "^6.8.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.0",
     "ioredis": "^5.10.0",
@@ -37,9 +37,9 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^10.0.0",
-    "@nestjs/cli": "^11.0.0",
-    "@nestjs/schematics": "^11.0.0",
-    "@nestjs/testing": "^11.0.1",
+    "@nestjs/cli": "^12.0.13",
+    "@nestjs/schematics": "^12.0.13",
+    "@nestjs/testing": "^12.5.1",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
@@ -57,7 +57,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.7.3",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.20.0"
   },
   "overrides": {

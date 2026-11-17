@@ -15,7 +15,7 @@ export class IntrospectTokenDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(2048)
-  proofToken: string;
+  proofToken!: string;
 
   @ApiPropertyOptional({
     description:
