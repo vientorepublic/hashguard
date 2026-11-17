@@ -1,5 +1,5 @@
 # Keep build and runtime libc/Node versions identical.
-ARG NODE_IMAGE=node:24.22.1-alpine
+ARG NODE_IMAGE=node:24.22.3-alpine
 FROM ${NODE_IMAGE} AS hardened-malloc
 # Pin allocator source instead of building a moving branch.
 ARG HARDENED_MALLOC_REV=bf37d54560a62b50da72e8fda56abf04f23b5fd2
