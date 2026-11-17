@@ -17,36 +17,36 @@ describe('Adaptive PoW flow', () => {
       expiresAt: Date.now() + 10000,
     };
     const store = {
-      findById: jest.fn().mockResolvedValue(challenge),
-      consume: jest.fn().mockResolvedValue(true),
-      save: jest.fn(),
+      findById: vi.fn().mockResolvedValue(challenge),
+      consume: vi.fn().mockResolvedValue(true),
+      save: vi.fn(),
     };
     const rates = {
-      incrementChallengeAndGetRates: jest
+      incrementChallengeAndGetRates: vi
         .fn()
         .mockResolvedValue({ rpm: 1, failRpm: 0, burstRpm: 1 }),
     };
     const risk = {
-      assess: jest
+      assess: vi
         .fn()
         .mockResolvedValue({ riskScore: 0, challengeRequired: false }),
-      checkVerificationRate: jest.fn(),
-      recordFailure: jest.fn(),
+      checkVerificationRate: vi.fn(),
+      recordFailure: vi.fn(),
     };
     const token = {
-      issue: jest
+      issue: vi
         .fn()
         .mockReturnValue({ token: 'signed', expiresAt: Date.now() + 10000 }),
     };
     const metrics = {
-      recordVerificationSuccess: jest.fn(),
-      recordChallengeIssued: jest.fn(),
+      recordVerificationSuccess: vi.fn(),
+      recordChallengeIssued: vi.fn(),
     };
     const difficulty = {
-      calculateFromSignals: jest
+      calculateFromSignals: vi
         .fn()
         .mockReturnValue({ difficultyBits: 16, targetHex: 'f'.repeat(64) }),
-      calculateFromRisk: jest
+      calculateFromRisk: vi
         .fn()
         .mockReturnValue({ difficultyBits: 18, targetHex: '0'.repeat(64) }),
     };

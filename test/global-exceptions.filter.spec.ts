@@ -1,11 +1,12 @@
+import { type Mock } from 'vitest';
 import { ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { GlobalExceptionsFilter } from '../src/common/filters/global-exceptions.filter';
 import { PowErrors } from '../src/common/exceptions/pow.exceptions';
 
 interface MockResponse {
-  setHeader: jest.Mock;
-  status: jest.Mock;
-  json: jest.Mock;
+  setHeader: Mock;
+  status: Mock;
+  json: Mock;
 }
 
 function runCatch(
@@ -15,14 +16,14 @@ function runCatch(
   const headers: Record<string, string> = {};
   let capturedStatus = 0;
   const response: MockResponse = {
-    setHeader: jest.fn((name: string, value: string) => {
+    setHeader: vi.fn((name: string, value: string) => {
       headers[name] = value;
     }),
-    status: jest.fn((code: number) => {
+    status: vi.fn((code: number) => {
       capturedStatus = code;
       return response;
     }),
-    json: jest.fn(),
+    json: vi.fn(),
   };
   const host = {
     switchToHttp: () => ({
