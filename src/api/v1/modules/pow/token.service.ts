@@ -16,6 +16,13 @@ interface JwtHeader {
   kid: string;
 }
 
+// Default tolerance (seconds) for a proof-token iat to lie ahead of the
+// verifier's clock, used when POW_IAT_FUTURE_SKEW_SECONDS is not configured.
+// Guards against a pre-issued token pool: a value far in the future is rejected
+// even though the signature is valid. Generous enough for normal multi-replica
+// clock skew.
+const DEFAULT_IAT_FUTURE_SKEW_SECONDS = 60;
+
 @Injectable()
 export class TokenService {
   private readonly logger = new Logger(TokenService.name);
@@ -24,12 +31,16 @@ export class TokenService {
   private readonly verificationKey: ProofTokenVerificationKey;
   private readonly keyId: string;
   private readonly ttlSeconds: number;
+  private readonly iatFutureSkewSeconds: number;
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly config: ConfigService,
   ) {
     this.ttlSeconds = config.get<number>('pow.proofTokenTtlSeconds')!;
+    this.iatFutureSkewSeconds =
+      config.get<number>('pow.iatFutureSkewSeconds') ??
+      DEFAULT_IAT_FUTURE_SKEW_SECONDS;
     const nodeEnv = config.get<string>('app.nodeEnv', 'development');
 
     const configuredPem = this.resolvePrivateKeyPem(
@@ -148,6 +159,13 @@ export class TokenService {
     const nowSec = Math.floor(Date.now() / 1000);
     if (!payload.exp || payload.exp <= nowSec) {
       throw PowErrors.tokenExpired();
+    }
+
+    // Defense-in-depth: reject an iat that lies more than the tolerated clock
+    // skew in the future, so a validly-signed but pre-dated token pool cannot be
+    // played early.
+    if (payload.iat - nowSec > this.iatFutureSkewSeconds) {
+      throw PowErrors.tokenInvalid();
     }
 
     // Resource binding must be checked before consuming a valid token.

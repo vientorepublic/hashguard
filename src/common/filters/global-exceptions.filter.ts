@@ -20,6 +20,7 @@ export class GlobalExceptionsFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let code = 'INTERNAL_ERROR';
+    let retryAfter: number | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -32,6 +33,12 @@ export class GlobalExceptionsFilter implements ExceptionFilter {
         code =
           (resObj.code as string) ??
           exception.constructor.name.replace('Exception', '').toUpperCase();
+        if (
+          typeof resObj.retryAfter === 'number' &&
+          Number.isFinite(resObj.retryAfter)
+        ) {
+          retryAfter = resObj.retryAfter;
+        }
       }
     } else if (
       exception instanceof Error &&
@@ -58,8 +65,11 @@ export class GlobalExceptionsFilter implements ExceptionFilter {
       );
     }
 
-    if (status === HttpStatus.TOO_MANY_REQUESTS)
-      response.setHeader('Retry-After', '60');
+    if (status === HttpStatus.TOO_MANY_REQUESTS) {
+      const seconds =
+        retryAfter != null && retryAfter > 0 ? Math.ceil(retryAfter) : 60;
+      response.setHeader('Retry-After', String(seconds));
+    }
     response.status(status).json({
       statusCode: status,
       code,

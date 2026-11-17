@@ -79,6 +79,38 @@ The SDK passes expected subject/context to introspection and checks both locally
 
 JSON request bodies are limited to 4 KiB in the application bootstrap. This bounded limit accommodates an ASCII JWT (up to 2048 bytes), a 128-character context (up to 768 JSON-escaped bytes), the original client IP and field overhead. The previous 2 KiB limit could reject legitimate binding-aware introspection requests for issued tokens. Oversize/malformed JSON receives 413/400. Deployments should also apply ingress limits before request parsing.
 
+## Calibration, ceiling, and known limits
+
+These notes keep the "benign bypass vs. real defense" tradeoff honest.
+
+- **PoW is friction, not the defense floor.** A SHA-256 leading-zero challenge is
+  farmable by a botnet/GPU pool, so protection comes from the hard token buckets
+  (request 60/min, units 120/min, burst 30/5s, verification 120/min), the
+  single-use assertion, and — at execution time — the integrator's own
+  account/session and concurrency limits. PoW only *ramps difficulty* as risk
+  rises; it cannot replace those controls.
+- **Adaptive difficulty ceiling is ~21 bits.** With C/P omitted the risk score
+  tops out at 75, so `calculateFromRisk` produces at most `round(16 + 6·75/100) ≈ 21`
+  bits. The configured `POW_MAX_DIFFICULTY_BITS=24` is only reachable through the
+  explicit `issueChallenge` rate-tier path, not the adaptive `/assessments` path.
+- **Free-work zone per context.** A request is challenge-exempt until `R ≥
+  POW_CHALLENGE_RISK_THRESHOLD` (default 20). For a cheap/unknown context
+  (cost = 1) the raw-request bucket (60/min) is exhausted before `R` reaches 20,
+  so PoW never engages for those requests — the hard limit carries them. PoW
+  meaningfully engages only when weighted units outpace the raw count (e.g.
+  `search`=3, `export`=20).
+- **`POW_MAX_CHALLENGE_RPM` governs two things.** It caps the adaptive raw-request
+  bucket (`hard:requests`) *and* the explicit `/challenges` issuance counter, via
+  two different mechanisms (token bucket vs. smoothed 1-minute window). Treat it
+  as a per-IP ~60/min ceiling for both adaptive and explicit issuance.
+- **Nonce contract.** The server accepts a nonce matching `[A-Za-z0-9_-]{1,128}`
+  and hashes it as-is (`SHA-256(id:seed:nonce) ≤ target`); it is not restricted to
+  a `0..2^64-1` decimal. A lucky fast nonce is accepted (default
+  `POW_MIN_SOLVE_TIME_MS=0`); enable it to reject suspiciously fast solves.
+- **`iat` future skew.** A validly-signed token whose `iat` lies more than ~60 s
+  ahead of the verifier clock is rejected (defense-in-depth against a pre-issued
+  pool); the window is intentionally generous for multi-replica clock skew.
+
 ## Follow-up validation on 2026-11-16
 
 A dedicated local standalone Redis instance and real HTTP requests passed all 32 E2E tests across three suites. The new production-parser regression exercises an escape-heavy valid context, binding mismatch without consumption, successful single consumption, replay rejection, oversize JSON (413), and malformed JSON (400). Before the limit correction the same regression failed with `expected 200 "OK", got 413 "Payload Too Large"`. This is single-instance local evidence, not a Redis Cluster, multi-replica, outage, mobile-performance, or production-load result.
