@@ -436,6 +436,35 @@ describe('PoW E2E', () => {
         .expect(400);
     });
 
+    it('should reject a nonce containing base64 characters', async () => {
+      const challengeRes = await request(httpServer)
+        .post('/v1/pow/challenges')
+        .send({})
+        .expect(201);
+
+      const { challengeId } = bodyOf<ChallengeApiResponse>(challengeRes);
+
+      // The server charset is [A-Za-z0-9_-]; '+'/'/'/'=' are not accepted.
+      await request(httpServer)
+        .post('/v1/pow/verifications')
+        .send({ challengeId, nonce: 'ab+cd/ef==000' })
+        .expect(400);
+    });
+
+    it('should reject an over-length nonce (>128 chars)', async () => {
+      const challengeRes = await request(httpServer)
+        .post('/v1/pow/challenges')
+        .send({})
+        .expect(201);
+
+      const { challengeId } = bodyOf<ChallengeApiResponse>(challengeRes);
+
+      await request(httpServer)
+        .post('/v1/pow/verifications')
+        .send({ challengeId, nonce: '0'.repeat(129) })
+        .expect(400);
+    });
+
     it('should reject non-integer solveTimeMs', async () => {
       const challengeRes = await request(httpServer)
         .post('/v1/pow/challenges')

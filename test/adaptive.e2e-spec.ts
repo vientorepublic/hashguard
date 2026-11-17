@@ -134,6 +134,17 @@ describe('Adaptive policy with Redis', () => {
     expect((await risk.assess(ip, 'export')).challengeRequired).toBe(true);
   });
 
+  it('keys risk per exact IP, so a /64 peer is not blocked by a sibling', async () => {
+    // Drives a sibling address into a challenge via the failure signal (no
+    // bucket cost), then proves a same-/64 peer keeps its own risk key and is
+    // unaffected. This locks the "no band-level single-dimension block" rule.
+    const drive = '2001:db8:1::1';
+    const peer = '2001:db8:1::2';
+    for (let i = 0; i < 6; i++) await risk.recordFailure(drive);
+    expect((await risk.assess(drive, '')).challengeRequired).toBe(true);
+    expect((await risk.assess(peer, '')).challengeRequired).toBe(false);
+  });
+
   it('does not reset hard buckets at a fixed-window boundary or partially debit on rejection', async () => {
     const ip = '198.51.100.6';
     const key = `risk:${createHmac('sha256', secret)

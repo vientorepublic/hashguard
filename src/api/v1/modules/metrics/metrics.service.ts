@@ -49,14 +49,18 @@ export class MetricsService {
   }
 
   async recordChallengeIssued(difficultyBits: number): Promise<void> {
-    await this.redis.incr(METRIC_KEYS.challengesIssued);
-    await this.redis.eval(
+    // Batch both counters into a single pipeline to avoid two sequential
+    // Redis round-trips on every challenge issuance.
+    const pipeline = this.redis.pipeline();
+    pipeline.incr(METRIC_KEYS.challengesIssued);
+    pipeline.eval(
       INCR_DIFFICULTY_DISTRIBUTION_SCRIPT,
       DISTRIBUTION_INCR_SCRIPT_KEY_COUNT,
       METRIC_KEYS.difficultyDistribution,
       difficultyBits.toString(),
       this.maxDifficultyDistributionKeys.toString(),
     );
+    await pipeline.exec();
   }
 
   async recordVerificationSuccess(

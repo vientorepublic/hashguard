@@ -7,6 +7,7 @@ const DIFFICULTY_DISTRIBUTION_KEY = 'metrics:difficulty:distribution';
 type MockPipeline = {
   incr: jest.Mock;
   incrby: jest.Mock;
+  eval: jest.Mock;
   exec: jest.Mock;
 };
 
@@ -19,10 +20,15 @@ type MockRedis = {
   pipeline: jest.Mock;
 };
 
-function makeRedisMocks(): { redis: Redis; mockRedis: MockRedis } {
+function makeRedisMocks(): {
+  redis: Redis;
+  mockRedis: MockRedis;
+  pipeline: MockPipeline;
+} {
   const pipeline: MockPipeline = {
     incr: jest.fn().mockReturnThis(),
     incrby: jest.fn().mockReturnThis(),
+    eval: jest.fn().mockReturnThis(),
     exec: jest.fn().mockResolvedValue([]),
   };
 
@@ -38,6 +44,7 @@ function makeRedisMocks(): { redis: Redis; mockRedis: MockRedis } {
   return {
     redis: mockRedis as unknown as Redis,
     mockRedis,
+    pipeline,
   };
 }
 
@@ -54,19 +61,20 @@ function makeConfig(maxDifficultyDistributionKeys = 64): ConfigService {
 
 describe('MetricsService', () => {
   it('should cap difficulty distribution key count when recording challenge', async () => {
-    const { redis, mockRedis } = makeRedisMocks();
+    const { redis, pipeline } = makeRedisMocks();
     const service = new MetricsService(redis, makeConfig());
 
     await service.recordChallengeIssued(24);
 
-    expect(mockRedis.incr).toHaveBeenCalledWith('metrics:challenges:issued');
-    expect(mockRedis.eval).toHaveBeenCalledWith(
+    expect(pipeline.incr).toHaveBeenCalledWith('metrics:challenges:issued');
+    expect(pipeline.eval).toHaveBeenCalledWith(
       expect.stringContaining("redis.call('HEXISTS'"),
       1,
       DIFFICULTY_DISTRIBUTION_KEY,
       '24',
       '64',
     );
+    expect(pipeline.exec).toHaveBeenCalled();
   });
 
   it('should build metrics snapshot from redis values', async () => {
@@ -88,17 +96,21 @@ describe('MetricsService', () => {
   });
 
   it('should use configured distribution key cap value', async () => {
-    const { redis, mockRedis } = makeRedisMocks();
+    const { redis, pipeline, mockRedis } = makeRedisMocks();
     const service = new MetricsService(redis, makeConfig(12));
 
     await service.recordChallengeIssued(25);
 
-    expect(mockRedis.eval).toHaveBeenCalledWith(
+    expect(pipeline.eval).toHaveBeenCalledWith(
       expect.any(String),
       1,
       DIFFICULTY_DISTRIBUTION_KEY,
       '25',
       '12',
     );
+    // Both counters must collapse into a single pipeline round-trip.
+    expect(pipeline.exec).toHaveBeenCalledTimes(1);
+    expect(mockRedis.incr).not.toHaveBeenCalled();
+    expect(mockRedis.eval).not.toHaveBeenCalled();
   });
 });

@@ -189,6 +189,7 @@ export function validateEnvironment(env: EnvMap): EnvMap {
     255,
   );
   parseOptionalInt(env, 'POW_MIN_SOLVE_TIME_MS', errors, 0);
+  parseOptionalInt(env, 'POW_IAT_FUTURE_SKEW_SECONDS', errors, 0);
   parseOptionalInt(env, 'POW_MAX_FAILURES_PER_CHALLENGE', errors, 1);
   parseOptionalInt(env, 'POW_MAX_CHALLENGE_RPM', errors, 1);
   parseOptionalInt(env, 'METRICS_MAX_DIFFICULTY_DISTRIBUTION_KEYS', errors, 1);
