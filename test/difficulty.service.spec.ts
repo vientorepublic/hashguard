@@ -34,9 +34,9 @@ function makeRateWindow(
   burstRpm = 0,
 ): RateWindowService {
   return {
-    getChallengeRequestsPerMinute: jest.fn().mockResolvedValue(rpm),
-    getFailureRatePerMinute: jest.fn().mockResolvedValue(failRpm),
-    getBurstRequestsPerMinute: jest.fn().mockResolvedValue(burstRpm),
+    getChallengeRequestsPerMinute: vi.fn().mockResolvedValue(rpm),
+    getFailureRatePerMinute: vi.fn().mockResolvedValue(failRpm),
+    getBurstRequestsPerMinute: vi.fn().mockResolvedValue(burstRpm),
   } as unknown as RateWindowService;
 }
 

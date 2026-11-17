@@ -1,31 +1,32 @@
+import { type MockInstance } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { installGracefulShutdown } from '../src/common/graceful-shutdown';
 
 describe('process shutdown handlers', () => {
   let dispose: (() => void) | undefined;
-  let exit: jest.SpyInstance;
+  let exit: MockInstance;
 
   beforeEach(() => {
-    jest.useFakeTimers();
-    exit = jest
+    vi.useFakeTimers();
+    exit = vi
       .spyOn(process, 'exit')
       .mockImplementation(() => undefined as never);
-    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
-    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    vi.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
   });
   afterEach(() => {
     dispose?.();
     dispose = undefined;
-    jest.clearAllTimers();
-    jest.useRealTimers();
-    jest.restoreAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it.each(['SIGTERM', 'SIGINT'] as const)(
     '%s waits for cleanup and exits successfully',
     async (signal) => {
       let finish!: () => void;
-      const close = jest.fn(
+      const close = vi.fn(
         () => new Promise<void>((resolve) => (finish = resolve)),
       );
       dispose = installGracefulShutdown({ close });
@@ -35,13 +36,13 @@ describe('process shutdown handlers', () => {
       finish();
       await Promise.resolve();
       expect(exit).toHaveBeenCalledWith(0);
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
     },
   );
 
   it('ignores repeated and mixed signals while requests drain', async () => {
     let finish!: () => void;
-    const close = jest.fn(
+    const close = vi.fn(
       () => new Promise<void>((resolve) => (finish = resolve)),
     );
     dispose = installGracefulShutdown({ close });
@@ -57,27 +58,27 @@ describe('process shutdown handlers', () => {
   });
 
   it('exits 1 when cleanup rejects', async () => {
-    const close = jest.fn().mockRejectedValue(new Error('close failed'));
+    const close = vi.fn().mockRejectedValue(new Error('close failed'));
     dispose = installGracefulShutdown({ close });
     process.emit('SIGTERM', 'SIGTERM');
     await Promise.resolve();
     expect(exit).toHaveBeenCalledWith(1);
-    expect(jest.getTimerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('bounds a hung shutdown with a forced failure exit', () => {
-    const close = jest.fn(() => new Promise<void>(() => {}));
+    const close = vi.fn(() => new Promise<void>(() => {}));
     dispose = installGracefulShutdown({ close }, 100);
     process.emit('SIGINT', 'SIGINT');
-    jest.advanceTimersByTime(99);
+    vi.advanceTimersByTime(99);
     expect(exit).not.toHaveBeenCalled();
-    jest.advanceTimersByTime(1);
+    vi.advanceTimersByTime(1);
     expect(exit).toHaveBeenCalledWith(1);
   });
 
   it('removes only the listeners it installed', () => {
     const count = process.listenerCount('SIGTERM');
-    dispose = installGracefulShutdown({ close: jest.fn() });
+    dispose = installGracefulShutdown({ close: vi.fn() });
     expect(process.listenerCount('SIGTERM')).toBe(count + 1);
     dispose();
     expect(process.listenerCount('SIGTERM')).toBe(count);
