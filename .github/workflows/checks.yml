@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 15
     services:
       redis:
-        image: redis:8.6.3
+        image: redis:8.10.3
         ports:
           - 6379:6379
         options: >-
