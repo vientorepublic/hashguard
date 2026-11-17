@@ -61,7 +61,7 @@
     "typescript-eslint": "^8.20.0"
   },
   "overrides": {
-    "file-type": "22.0.1",
+    "file-type": "22.3.0",
     "@angular-devkit/core": {
       "ajv": "8.20.0"
     }
