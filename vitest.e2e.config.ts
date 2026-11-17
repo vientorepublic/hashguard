@@ -13,5 +13,10 @@ export default defineConfig({
     environment: 'node',
     pool: 'forks',
     poolOptions: { forks: { singleFork: true } },
+    // The PoW solve in these specs is synchronous and CPU-bound, so on a
+    // loaded CI runner a single issue+solve+verify round can exceed vitest's
+    // 5s default. Give the E2E suite headroom; a real hang still surfaces.
+    testTimeout: 20_000,
+    hookTimeout: 30_000,
   },
 });
