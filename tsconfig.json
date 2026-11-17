@@ -16,7 +16,7 @@
     "rootDir": ".",
     "incremental": true,
     "skipLibCheck": true,
-    "types": ["node", "jest"],
+    "types": ["node", "vitest/globals"],
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,

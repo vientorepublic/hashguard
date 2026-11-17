@@ -1,3 +1,4 @@
+import { type Mock } from 'vitest';
 import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
 import { MetricsService } from '../src/api/v1/modules/metrics/metrics.service';
@@ -5,19 +6,19 @@ import { MetricsService } from '../src/api/v1/modules/metrics/metrics.service';
 const DIFFICULTY_DISTRIBUTION_KEY = 'metrics:difficulty:distribution';
 
 type MockPipeline = {
-  incr: jest.Mock;
-  incrby: jest.Mock;
-  eval: jest.Mock;
-  exec: jest.Mock;
+  incr: Mock;
+  incrby: Mock;
+  eval: Mock;
+  exec: Mock;
 };
 
 type MockRedis = {
-  incr: jest.Mock;
-  incrby: jest.Mock;
-  eval: jest.Mock;
-  mget: jest.Mock;
-  hgetall: jest.Mock;
-  pipeline: jest.Mock;
+  incr: Mock;
+  incrby: Mock;
+  eval: Mock;
+  mget: Mock;
+  hgetall: Mock;
+  pipeline: Mock;
 };
 
 function makeRedisMocks(): {
@@ -26,19 +27,19 @@ function makeRedisMocks(): {
   pipeline: MockPipeline;
 } {
   const pipeline: MockPipeline = {
-    incr: jest.fn().mockReturnThis(),
-    incrby: jest.fn().mockReturnThis(),
-    eval: jest.fn().mockReturnThis(),
-    exec: jest.fn().mockResolvedValue([]),
+    incr: vi.fn().mockReturnThis(),
+    incrby: vi.fn().mockReturnThis(),
+    eval: vi.fn().mockReturnThis(),
+    exec: vi.fn().mockResolvedValue([]),
   };
 
   const mockRedis: MockRedis = {
-    incr: jest.fn().mockResolvedValue(1),
-    incrby: jest.fn().mockResolvedValue(1),
-    eval: jest.fn().mockResolvedValue(1),
-    mget: jest.fn().mockResolvedValue(['10', '7', '3', '3200', '8']),
-    hgetall: jest.fn().mockResolvedValue({ '20': '3', '21': '4' }),
-    pipeline: jest.fn().mockReturnValue(pipeline),
+    incr: vi.fn().mockResolvedValue(1),
+    incrby: vi.fn().mockResolvedValue(1),
+    eval: vi.fn().mockResolvedValue(1),
+    mget: vi.fn().mockResolvedValue(['10', '7', '3', '3200', '8']),
+    hgetall: vi.fn().mockResolvedValue({ '20': '3', '21': '4' }),
+    pipeline: vi.fn().mockReturnValue(pipeline),
   };
 
   return {
