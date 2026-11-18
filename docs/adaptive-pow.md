@@ -58,9 +58,9 @@ This issuer does not host application endpoints or authenticate accounts/session
 
 ## Verification
 
-`npm test -- --runInBand` covers policy decisions, default SDK behavior, hard-limit propagation, failure handling, explicit expiry, and the challenge-consumption race using mocked storage. Build and lint checks apply to both repositories.
+`npm test` covers policy decisions, default SDK behavior, hard-limit propagation, failure handling, explicit expiry, and the challenge-consumption race using mocked storage. Build and lint checks apply to both repositories.
 
-With a dedicated Redis instance available, run `npm run test:e2e -- --runInBand`. `adaptive.e2e-spec.ts` uses real Lua state under a unique Redis prefix to cover low-risk single-use assertions, challenge solving with concurrent verification, concurrent limits, failure decay and window carry-over. These tests also cover token-bucket rejection without partial debit and are separate from mocked unit evidence. Existing HTTP E2E tests also require permission to bind a local socket.
+With a dedicated Redis instance available, run `npm run test:e2e`. `adaptive.e2e-spec.ts` uses real Lua state under a unique Redis prefix to cover low-risk single-use assertions, challenge solving with concurrent verification, concurrent limits, failure decay and window carry-over. These tests also cover token-bucket rejection without partial debit and are separate from mocked unit evidence. Existing HTTP E2E tests also require permission to bind a local socket.
 
 ## Resource backend constraints
 

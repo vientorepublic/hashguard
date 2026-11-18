@@ -22,11 +22,10 @@ export const REDIS_SHUTDOWN_TIMEOUT_MS = 5_000;
           maxRetriesPerRequest: 3,
           enableReadyCheck: true,
           lazyConnect: false,
-          // ioredis 6's default retryStrategy is exponential (50 × 2^(n-1), 5s cap)
-          // with 30s TCP keepAlive. A transient Redis hiccup could then block a
-          // command for ~15s (3 retries × 5s), stalling the E2E PoW tests past
-          // their timeout. Bound each reconnect at 500ms so a hiccup can't hang
-          // the event loop for seconds.
+          // Fail fast on a transient Redis blip: under the fail-closed invariant a
+          // stuck command becomes a 503, so a hiccup must not hold a request for
+          // seconds. Cap the reconnect backoff at 500ms and skip TCP keepAlive
+          // (the service is always in use, so idle-connection probing adds little).
           retryStrategy: (times: number) => Math.min(times * 100, 500),
           keepAlive: 0,
         });
