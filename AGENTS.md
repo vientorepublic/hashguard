@@ -6,14 +6,14 @@ NestJS (TypeScript) Proof-of-Work CAPTCHA API. Redis-backed, SHA-256, adaptive d
 
 - **Redis required for anything but unit tests:** `docker compose up -d redis`.
 - Dev: `npm run start:dev` — API `http://localhost:3000/v1`, Swagger `/docs`.
-- **Unit:** `npm test -- --runInBand`. The jest config (`package.json`) ignores `*.e2e-spec.ts`, so `npm test` never runs E2E.
-- **E2E:** `npm run test:e2e -- --runInBand` — uses `test/jest-e2e.json`, needs a live Redis + HTTP. `--runInBand` matters (shared Redis state).
+- **Unit:** `npm test` (vitest `run`). The config (`vitest.config.ts`) ignores `*.e2e-spec.ts`, so `npm test` never runs E2E.
+- **E2E:** `npm run test:e2e` — uses `vitest.e2e.config.ts`, needs a live Redis + HTTP. `pool: forks` + `singleFork` keep shared Redis state serial (replaces Jest's `--runInBand`).
 - **Lint (local rewrites):** `npm run lint` runs ESLint `--fix`. CI runs the non-mutating form `npx --no-install eslint '{src,test}/**/*.ts'`.
 - **Typecheck:** no npm script — use `npx tsc --noEmit` (what CI does).
 - **Build:** `npm run build` (`nest build`, `deleteOutDir`).
 - Docker: `docker compose up --build -d` (hardened app + Redis).
 
-CI gate order (`.github/workflows/checks.yml`): lint(no `--fix`) → `tsc --noEmit` → build → unit(`--runInBand`) → E2E(`--runInBand`, real Redis) → Docker image build → hardening scripts.
+CI gate order (`.github/workflows/checks.yml`): lint(no `--fix`) → `tsc --noEmit` → build → unit → E2E(real Redis) → Docker image build → hardening scripts.
 
 ## Structure
 

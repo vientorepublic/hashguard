@@ -33,7 +33,7 @@ export class VerifyChallengeDto {
   })
   @IsUUID()
   @IsNotEmpty()
-  challengeId: string;
+  challengeId!: string;
 
   @ApiProperty({
     description:
@@ -47,7 +47,7 @@ export class VerifyChallengeDto {
   @Matches(/^[a-zA-Z0-9_-]+$/, {
     message: 'nonce must be alphanumeric (a-z, A-Z, 0-9, _, -)',
   })
-  nonce: string;
+  nonce!: string;
 
   @ApiPropertyOptional({ type: ClientMetricsDto })
   @IsOptional()

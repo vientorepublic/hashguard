@@ -22,6 +22,12 @@ export const REDIS_SHUTDOWN_TIMEOUT_MS = 5_000;
           maxRetriesPerRequest: 3,
           enableReadyCheck: true,
           lazyConnect: false,
+          // Fail fast on a transient Redis blip: under the fail-closed invariant a
+          // stuck command becomes a 503, so a hiccup must not hold a request for
+          // seconds. Cap the reconnect backoff at 500ms and skip TCP keepAlive
+          // (the service is always in use, so idle-connection probing adds little).
+          retryStrategy: (times: number) => Math.min(times * 100, 500),
+          keepAlive: 0,
         });
       },
     },

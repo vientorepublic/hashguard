@@ -117,7 +117,7 @@ function verifyProofTokenSignature(
 ): boolean {
   const [encodedHeader, encodedPayload, encodedSignature] = token.split('.');
   const publicKey = crypto.createPublicKey({
-    key: verificationKey as unknown as crypto.JsonWebKey,
+    key: verificationKey,
     format: 'jwk',
   });
 

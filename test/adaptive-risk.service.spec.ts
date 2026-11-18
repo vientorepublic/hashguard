@@ -15,10 +15,10 @@ describe('Adaptive policy', () => {
       maxDifficultyBits: 24,
     },
   });
-  const evalMock = jest.fn<
-    Promise<string[]>,
-    [string, number, string, string, number, number, number, number, number]
-  >();
+  const evalMock =
+    vi.fn<
+      (script: string, numKeys: number, ...args: string[]) => Promise<string[]>
+    >();
   const risk = new AdaptiveRiskService(
     { eval: evalMock } as unknown as Redis,
     config,

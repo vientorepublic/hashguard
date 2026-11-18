@@ -249,7 +249,7 @@ npm test
 Redis must be running:
 
 ```bash
-npm run test:e2e -- --runInBand
+npm run test:e2e
 ```
 
 ## Security & Operations

@@ -1,30 +1,31 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  HealthCheckError,
-  HealthIndicator,
-  HealthIndicatorResult,
-} from '@nestjs/terminus';
+import { HealthIndicatorResult } from '@nestjs/terminus';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from '../../../../modules/redis/redis.module';
 
 @Injectable()
-export class RedisHealthIndicator extends HealthIndicator {
-  constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {
-    super();
-  }
+export class RedisHealthIndicator {
+  constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
       const pong = await this.redis.ping();
-      const up = pong === 'PONG';
-      const result = this.getStatus(key, up);
-      if (!up) throw new HealthCheckError('Redis ping failed', result);
-      return result;
+      if (pong !== 'PONG') {
+        return {
+          [key]: { status: 'down', message: 'Redis ping did not return PONG' },
+        };
+      }
+      return { [key]: { status: 'up' } };
     } catch (err) {
-      const result = this.getStatus(key, false, {
-        message: err instanceof Error ? err.message : 'unknown',
-      });
-      throw new HealthCheckError('Redis health check failed', result);
+      // Return a DOWN status rather than throwing: terminus v12 routes a
+      // returned 'down' to the failed-indicator list (-> 503), while a thrown
+      // error bypasses that and surfaces as a 500 "Internal server error".
+      return {
+        [key]: {
+          status: 'down',
+          message: err instanceof Error ? err.message : 'unknown',
+        },
+      };
     }
   }
 }
